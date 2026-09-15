@@ -9,24 +9,23 @@ from llama_index.core import StorageContext, load_index_from_storage
 from llama_index.core.node_parser import TokenTextSplitter
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 class Retriever:
-    def __init__(self, stored_index = None, path = None, api_version="2023-03-15-preview"):
-        self.embed_model, self.llm = self.setup_api(api_version)
+    def __init__(self, stored_index = None, path = None):
+        self.embed_model, self.llm = self.setup_models()
         self.index = self.retrieve_documents(stored_index, path)
 
-    def setup_api(self, api_version):
-        if "OPENAI_API_KEY" not in os.environ:
-            api_key = input("Enter OpenAI API key:")
-            os.environ["OPENAI_API_KEY"] = api_key
-
-        api_key = os.environ["OPENAI_API_KEY"]
-        
-        embed_model = OpenAIEmbedding(
-            model="text-embedding-ada-002", api_key=api_key
+    def setup_models(self):
+        embed_model = HuggingFaceEmbedding(
+            model_name="BAAI/bge-small-en-v1.5"
         )
 
-        llm = OpenAI(api_key=api_key, model="gpt-3.5-turbo")
+        llm = Ollama(
+            model="llama3.1:8b",
+            request_timeout=600.0
+        )
 
         return embed_model, llm
 

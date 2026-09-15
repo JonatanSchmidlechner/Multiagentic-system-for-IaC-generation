@@ -473,7 +473,7 @@ def main():
     # Build composition dict programmatically with multi-agent included
     models = [
         "gpt4",
-        "gpt5",  # added
+        #"gpt5",  # added
         "gpt3.5",
         "gemini-1.0-pro",
         "codellama-34b",
@@ -481,6 +481,7 @@ def main():
         "codellama-7b",
         "Magicoder_S_CL_7B",
         "Wizardcoder33b",
+        "llama3.1:8b"
     ]
     strategies = ["COT", "FSP", "multi-turn", "RAG", "multi-agent", "Standard"]
     composition_dict = {m: {s: {"complete": []} for s in strategies} for m in models}

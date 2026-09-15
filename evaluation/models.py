@@ -7,6 +7,12 @@ import sagemaker
 import json
 import subprocess
 import time
+from ollama import chat
+from ollama import Client
+
+ollama_client = Client(
+  host='http://86.50.169.115:11434',
+)
 
 # GPT evaluation generation
 # set your API key here, need to be hided
@@ -343,3 +349,49 @@ def gemini_2_flash(preprompt, prompt):
 # print(Magicoder_S_CL_7B("You are TerraformAI, an AI agent that builds and deploys Cloud Infrastructure written in Terraform HCL. Generate a description of the Terraform program you will define, followed by a single Terraform HCL program in response to each of my Instructions. Make sure the configuration is deployable. Create IAM roles as needed. If variables are used, make sure default values are supplied.", "Here is the actual prompt: Create an AWS VPC resource with an Internet Gateway attached to it"))
 
 # print(Wizardcoder34b("You are TerraformAI, an AI agent that builds and deploys Cloud Infrastructure written in Terraform HCL. Generate a description of the Terraform program you will define, followed by a single Terraform HCL program in response to each of my Instructions. Make sure the configuration is deployable. Create IAM roles as needed. If variables are used, make sure default values are supplied.", "Here is the actual prompt: Create an AWS VPC resource with an Internet Gateway attached to it"))
+
+def Llama3_1_8b(preprompt, prompt):
+    while True:
+        try:
+            response = ollama_client.chat(
+                model="llama3.1:8b",   
+                messages=[
+                    {"role": "system", "content": preprompt},
+                    {"role": "user", "content": prompt},
+                ],
+                options={
+                    "num_predict": 1000,
+                    "temperature": 0.95,
+                },
+            )
+            return response.message.content
+        except Exception as e:
+            s = str(e)
+            if "Rate limit is exceeded" in s:
+                time.sleep(30)
+                continue
+            else:
+                return ""
+
+def qwen2_5_coder(preprompt, prompt):
+    while True:
+        try:
+            response = chat(
+                model="qwen2.5-coder",
+                messages=[
+                    {"role": "system", "content": preprompt},
+                    {"role": "user", "content": prompt},
+                ],
+                options={
+                    "num_predict": 1000,
+                    "temperature": 0.95,
+                },
+            )
+            return response.message.content
+        except Exception as e:
+            s = str(e)
+            if "Rate limit is exceeded" in s:
+                time.sleep(30)
+                continue
+            else:
+                return ""

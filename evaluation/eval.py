@@ -653,6 +653,8 @@ def model_evaluation(
                 text = models.Wizardcoder33b(preprompt, prompt)
             elif model == "Wizardcoder34b":
                 text = models.Wizardcoder34b(preprompt, prompt)
+            elif model == "llama3.1:8b":
+                text = models.Llama3_1_8b(preprompt, prompt) 
 
             logger.info(f"Model raw output: {text}")
 
