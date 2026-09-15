@@ -1,14 +1,10 @@
 import os
 import logging
 import sys
-from llama_index.llms.azure_openai import AzureOpenAI
-from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core import Settings
 from llama_index.core import StorageContext, load_index_from_storage
 from llama_index.core.node_parser import TokenTextSplitter
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 

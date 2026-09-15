@@ -3,7 +3,6 @@ import google.generativeai as genai
 import os
 import requests
 import boto3
-import sagemaker
 import json
 import subprocess
 import time
@@ -247,6 +246,12 @@ def Wizardcoder33b(preprompt, prompt):
     return ""
 
 def Magicoder_S_CL_7B(preprompt, prompt):
+    try:
+        import sagemaker
+    except ImportError as e:
+        raise RuntimeError(
+            "Magicoder_S_CL_7B requires the 'sagemaker' package."
+        ) from e
     while True: 
         try:
             my_session = boto3.session.Session(profile_name=os.environ["AWS_ROLE_NAME"])
