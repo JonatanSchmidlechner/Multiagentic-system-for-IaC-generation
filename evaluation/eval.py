@@ -17,6 +17,9 @@ import models
 import prompt_templates
 import data
 import math
+from true_mas.pipeline import run_true_mas
+from true_mas.config import BASE_URL
+from true_mas.agents.agent_utils import load_effgen_model
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "retriever"))
@@ -32,21 +35,22 @@ DELIMITERS = ["```hcl", "```json", "```HCL", "```Terraform", "```terraform", "``
 # Default configurations if not specified
 NUM_SAMPLES_PER_TASK = 20  # n
 EVAL_MODELS = [
-    "gpt3.5",
-    "gpt4",
-    "gpt5",  # added
-    "gemini-1.0-pro",
-    "gemini-2.5-pro",  # added
-    "gemini-2.0-flash",  # added
-    "codellama-7b",
-    "codellama-13b",
-    "codellama-34b",
-    "Magicoder_S_CL_7B",
-    "Wizardcoder33b",
-    "Wizardcoder34b",
+    "llama3.1:8b",
+    # "gpt3.5",
+    # "gpt4",
+    # "gpt5",  # added
+    # "gemini-1.0-pro",
+    # "gemini-2.5-pro",  # added
+    # "gemini-2.0-flash",  # added
+    # "codellama-7b",
+    # "codellama-13b",
+    # "codellama-34b",
+    # "Magicoder_S_CL_7B",
+    # "Wizardcoder33b",
+    # "Wizardcoder34b",
 ]  # default to all available models
 
-PROMPT_ENHANCEMENT_STRATS = ["RAG", "COT", "FSP", "multi-turn", "multi-agent", ""]  # added multi-agent
+PROMPT_ENHANCEMENT_STRATS = ["RAG", "COT", "FSP", "multi-turn", "multi-agent", "true-MAS"]  # added true-MAS
 
 class CustomFormatter(logging.Formatter):
     # https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -99,6 +103,9 @@ def dict_generator(indict, pre=None):
 def rag_knowledge(Retriever, query):
     knowledge = ""
     questions = Retriever.generate_prompt_for_index(query)
+    print("Generated questions for RAG retrieval:")
+    for q in questions:
+        print(f" - {q}")
     context = Retriever.query_documents(questions)
     for i, c in enumerate(context):
         if i >= 4:
@@ -356,8 +363,9 @@ def list_all_subdirectories_and_eval(
 def create_evaluation_directories(subdir, base_eval_dir="evaluation/tmp", final_eval_dir="results"):
     for model in EVAL_MODELS:
         # construct the new directory path
-        eval_dir_path = os.path.join(base_eval_dir, model, subdir)
-        final_eval_dir_path = os.path.join(final_eval_dir, model, subdir)
+        safe_model_name = model.replace(":", "_")
+        eval_dir_path = os.path.join(base_eval_dir, safe_model_name, subdir)
+        final_eval_dir_path = os.path.join(final_eval_dir, safe_model_name, subdir)
         # create the directory if it does not exist
         os.makedirs(eval_dir_path, exist_ok=True)
         os.makedirs(final_eval_dir_path, exist_ok=True)
@@ -455,10 +463,11 @@ def copy_csv_to_evaluation(
         if PROMPT_ENHANCEMENT_STRAT != ""
         else "{}.csv".format(eval_filename_prefix)
     )
+    safe_model_name = model.replace(":", "_") # colon wont work in Windows file names, so replace with underscore
+    
+    dest_file_path = os.path.join(base_eval_dir, safe_model_name, subdir, eval_filename)
 
-    dest_file_path = os.path.join(base_eval_dir, model, subdir, eval_filename)
-
-    final_file_path = os.path.join(final_eval_dir, model, subdir, eval_filename)
+    final_file_path = os.path.join(final_eval_dir, safe_model_name, subdir, eval_filename)
 
     df = pd.read_csv(src_file_path, header=None)
     # set the third row as the header
@@ -519,7 +528,7 @@ def copy_csv_to_evaluation(
 
 # gpt result
 def read_models(
-    model,
+    model_name,
     PROMPT_ENHANCEMENT_STRAT,
     NUM_EXISTING_SAMPLES,
     eval_filepath,
@@ -536,6 +545,10 @@ def read_models(
     # Read from evaluation dataset file:
     df = pd.read_csv(eval_filepath, header=0)
 
+    # For true-MAS we generate 
+    if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
+        effgen_model = load_effgen_model(model_name, BASE_URL)
+
     for index, row in df.iterrows():
         # iterate every row
         # find specific column
@@ -544,17 +557,18 @@ def read_models(
             preprompt,
             df,
             index,
-            model,
+            model_name,
             PROMPT_ENHANCEMENT_STRAT,
             NUM_EXISTING_SAMPLES,
             Retriever,
             uuid_1,
+            effgen_model
         )
 
     df.to_csv(eval_filepath, index=False, encoding="utf-8")
     df.to_csv(final_filepath, index=False, encoding="utf-8")
 
-    logger.info(f"Finished evaluation for {model}")
+    logger.info(f"Finished evaluation for {model_name}")
 
 
 def get_plan_result_template():
@@ -601,11 +615,12 @@ def model_evaluation(
     preprompt,
     df,
     index,
-    model,
+    model_name,
     PROMPT_ENHANCEMENT_STRAT,
     NUM_EXISTING_SAMPLES,
     Retriever,
     uuid_1,
+    effgen_model
 ):
     """
     Note: Multi-turn implies 2 turns only
@@ -617,46 +632,89 @@ def model_evaluation(
         if math.isnan(row["Prompt"]):
             return
 
-    prompt = prompt_enhancements(prompt, PROMPT_ENHANCEMENT_STRAT, Retriever)
+    # True_mas gets the plain prompt and not an enhanced one.
+    if PROMPT_ENHANCEMENT_STRAT != "true-MAS":
+        prompt = prompt_enhancements(prompt, PROMPT_ENHANCEMENT_STRAT, Retriever)
 
     policy_file = row["Rego intent"]
     num_correct = 0
-    logger.info(f"Begin testing model: {model}")
+    logger.info(f"Begin testing model: {model_name}")
     for i in range(NUM_EXISTING_SAMPLES, NUM_SAMPLES_PER_TASK):
-        multi_turn_count = 1
-        while True:
-            is_empty_code = False
-            logger.info(f"Sample {i} for model {model}")
-            logger.info(f"Preprompt: {preprompt}")
-            logger.info(f"Prompt: {prompt}")
-            if model == "gpt4":
-                text = models.GPT4(preprompt, prompt, gpt_client)
-            elif model == "gpt3.5":
-                text = models.GPT3_5(preprompt, prompt, gpt_client)
-            elif model == "gpt5":
-                text = models.GPT5(preprompt, prompt, gpt_client)
-            elif model == "gemini-1.0-pro":
-                text = models.gemini(preprompt, prompt)
-            elif model == "gemini-2.5-pro":
-                text = models.gemini_2_5(preprompt, prompt)
-            elif model == "gemini-2.0-flash":
-                text = models.gemini_2_flash(preprompt, prompt)
-            elif model == "codellama-13b":
-                text = models.Codellama13b(preprompt, prompt)
-            elif model == "codellama-7b":
-                text = models.Codellama7b(preprompt, prompt)
-            elif model == "codellama-34b":
-                text = models.Codellama34b(preprompt, prompt)
-            elif model == "Magicoder_S_CL_7B":
-                text = models.Magicoder_S_CL_7B(preprompt, prompt)
-            elif model == "Wizardcoder33b":
-                text = models.Wizardcoder33b(preprompt, prompt)
-            elif model == "Wizardcoder34b":
-                text = models.Wizardcoder34b(preprompt, prompt)
-            elif model == "llama3.1-8b":
-                text = models.Llama3_1_8b(preprompt, prompt) 
+
+        # ============================================================
+        # TRUE_MAS STARTS HERE
+        # ============================================================
+        if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
+            logger.info(f"Running true-MAS evaluation for sample {i} for model {model_name}")
+
+            plain_task_prompt = row["Prompt"]
+            aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
+
+            result = run_true_mas(
+                model=effgen_model,
+                task_prompt=plain_task_prompt,
+                policy_file=policy_file,
+                aws_docs_context=aws_docs_context,
+                evaluator=eval_pipeline,
+                uuid_1=uuid_1,
+            )
+
+            text = result["terraform_code"]
+            x = result["evaluation_result"]
 
             logger.info(f"Model raw output: {text}")
+            df.at[index, "LLM Output #" + str(i)] = text
+            df.at[index, "LLM Plannable? #" + str(i)] = x["terraform_plan_success"]
+            df.at[index, "LLM Correct? #" + str(i)] = x["opa_evaluation_result"]
+            df.at[index, "LLM Plan Phase Error #" + str(i)] = x["terraform_plan_error"]
+            df.at[index, "LLM OPA match phase Error #" + str(i)] = x["opa_evaluation_error"]
+            df.at[index, "LLM Notes #" + str(i)] = x["notes"]
+            logging.info("Plan Result Summary:")
+            for key, value in x.items():
+                logging.info(f"{key}: {value}")
+    
+            # After pipeline run:
+            if str(x["opa_evaluation_result"]).strip().lower() == "success":  # fixed case
+                num_correct += 1
+
+            # ============================================================
+            # TRUE_MAS ENDS HERE
+            # ============================================================
+            continue
+            
+    
+        is_empty_code = False
+        multi_turn_count = 1
+        while True:
+            logger.info(f"Sample {i} for model {model_name}")
+            logger.info(f"Preprompt: {preprompt}")
+            logger.info(f"Prompt: {prompt}")
+            if model_name == "gpt4":
+                text = models.GPT4(preprompt, prompt, gpt_client)
+            elif model_name == "gpt3.5":
+                text = models.GPT3_5(preprompt, prompt, gpt_client)
+            elif model_name == "gpt5":
+                text = models.GPT5(preprompt, prompt, gpt_client)
+            elif model_name == "gemini-1.0-pro":
+                text = models.gemini(preprompt, prompt)
+            elif model_name == "gemini-2.5-pro":
+                text = models.gemini_2_5(preprompt, prompt)
+            elif model_name == "gemini-2.0-flash":
+                text = models.gemini_2_flash(preprompt, prompt)
+            elif model_name == "codellama-13b":
+                text = models.Codellama13b(preprompt, prompt)
+            elif model_name == "codellama-7b":
+                text = models.Codellama7b(preprompt, prompt)
+            elif model_name == "codellama-34b":
+                text = models.Codellama34b(preprompt, prompt)
+            elif model_name == "Magicoder_S_CL_7B":
+                text = models.Magicoder_S_CL_7B(preprompt, prompt)
+            elif model_name == "Wizardcoder33b":
+                text = models.Wizardcoder33b(preprompt, prompt)
+            elif model_name == "Wizardcoder34b":
+                text = models.Wizardcoder34b(preprompt, prompt)
+            elif model_name == "llama3.1:8b":
+                text = models.Llama3_1_8b(preprompt, prompt) 
 
             answer, code = separate_answer_and_code(text, DELIMITERS)
             if code == "":
@@ -664,6 +722,9 @@ def model_evaluation(
                 is_empty_code = True
             logger.info("Answer is: {}".format(answer))
             logger.info("Code is: {}".format(code))
+
+            logger.info(f"Model raw output: {text}")
+
 
             df.at[index, "LLM Output #" + str(i)] = text
             if is_empty_code:
@@ -1107,9 +1168,9 @@ def main(
         # FIX?: should this be changed to an option instead of argument
     )
 
-    # Setup environment variables:
-    set_aws_credentials()
-    set_replicate_credentials()
+    # Setup environment variables. These are commented out because they are not needed for local models.
+    # set_aws_credentials()
+    # set_replicate_credentials()
     # set_huggingface_credentials()
 
     if "gemini-1.0-pro" in models or "gemini-2.5-pro" in models or "gemini-2.0-flash" in models:
@@ -1122,7 +1183,7 @@ def main(
         setup_magicoder_params()
 
     # Setup retriever:
-    if PROMPT_ENHANCEMENT_STRAT in ("RAG", "multi-agent"):
+    if PROMPT_ENHANCEMENT_STRAT in ("RAG", "multi-agent", "true-MAS"):
         Retriever = llama_index_retriever.Retriever(
             stored_index="../retriever/aws-index",
             path="../retriever/terraform-provider-aws/website/docs/r",
