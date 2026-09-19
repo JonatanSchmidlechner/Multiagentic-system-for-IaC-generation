@@ -71,7 +71,7 @@ def estimator(n: int, c: int, k: int) -> float:
         return 1.0
     return 1.0 - np.prod(1.0 - k / np.arange(n - c + 1, n + 1))
 
-def list_all_subdirectories(composition_dict, data_dir, excluded_dirs, strats=["multi-turn", "RAG", "COT", "FSP", "multi-agent"]):
+def list_all_subdirectories(composition_dict, data_dir, excluded_dirs, strats=["multi-turn", "RAG", "COT", "FSP", "multi-agent", "true-MAS"]):
     # onlyfiles = [os.path.join(dirpath,f) for (dirpath, dirnames, filenames) in os.walk(data_dir) if dirpath not in excluded_dirs in os.walk(data_dir) for f in filenames] 
     onlyfiles = []
     for dirpath, dirnames, filenames in os.walk(data_dir):
@@ -366,7 +366,7 @@ def metric_calculation_loop(composition_dict, dataset_dir, output_composition_di
 
     return output_composition_dict
 
-def extract_dataset_row(eval_row, eval_index, eval_df, dataset_dir, eval_filename, strats=["multi-turn", "RAG", "COT", "FSP", "multi-agent"]):
+def extract_dataset_row(eval_row, eval_index, eval_df, dataset_dir, eval_filename, strats=["multi-turn", "RAG", "COT", "FSP", "multi-agent", "true-MAS"]):
     """
     Example eval_filename: '/home/ubuntu/autoiac-tasks/evaluation/misc/ablation/../../../results-for-iac-eval (backup)/multi-turn/codellama-34b/george/evaluation-dataset-for-plain-dataset-george-existing-multi-turn.csv'
     """
@@ -472,18 +472,18 @@ def main():
     excluded_dirs = ["llm-judge-evaluation-metric", "pass"] # skip filenames containing "pass". will merge them into a regular file once done with eval..
     # Build composition dict programmatically with multi-agent included
     models = [
-        "gpt4",
+        #"gpt4",
         #"gpt5",  # added
-        "gpt3.5",
-        "gemini-1.0-pro",
-        "codellama-34b",
-        "codellama-13b",
-        "codellama-7b",
-        "Magicoder_S_CL_7B",
-        "Wizardcoder33b",
-        "llama3.1:8b"
+        #"gpt3.5",
+        #"gemini-1.0-pro",
+        #"codellama-34b",
+        #"codellama-13b",
+        #"codellama-7b",
+        #"Magicoder_S_CL_7B",
+        #"Wizardcoder33b",
+        "llama3.1_8b"
     ]
-    strategies = ["COT", "FSP", "multi-turn", "RAG", "multi-agent", "Standard"]
+    strategies = ["COT", "FSP", "multi-turn", "RAG", "multi-agent", "Standard", "true-MAS"]
     composition_dict = {m: {s: {"complete": []} for s in strategies} for m in models}
 
     eval_dataset_files, composition_dict = list_all_subdirectories(composition_dict, eval_dataset_dir, excluded_dirs)

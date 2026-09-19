@@ -1,22 +1,25 @@
-from .schemas import IIRPlan
+from .schemas import IIRPlan, PlannerPlan
 
 from .agents.planner import planner
 from .agents.providerHarmonizer import provider_harmonizer
 from .agents.generator import iac_generator
 from .agents.reviewer import reviewer
+from .schema_retrieval import retrieve_provider_schemas_object
 
-def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, uuid_1):
+def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, uuid_1, aws_provider_schemas):
     print("Retrieved AWS docs context for Planner:")
     print(aws_docs_context)
     planner_response = planner(model, task_prompt, aws_docs=aws_docs_context)
     print("Planner response:")
     print(planner_response.text)
-    initial_iir_json = IIRPlan.model_validate_json(planner_response.text)
+    planner_plan = PlannerPlan.model_validate_json(planner_response.text)
+    planner_plan_text = planner_plan.model_dump_json()
 
+    provider_candidate_schemas_object = retrieve_provider_schemas_object(planner_plan, aws_provider_schemas)
     provider_harmonizer_response = provider_harmonizer(
         model,
-        initial_iir_json,
-        schemas={}
+        planner_plan_text,
+        provider_candidate_schemas_object
     )
     print("Final I-IR after provider harmonization:")
     print(provider_harmonizer_response.text)

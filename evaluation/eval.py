@@ -29,6 +29,7 @@ import click
 from typing import List, Tuple
 
 DEFAULT_LOG_FILE = "logs/eval.log"
+SCHEMA_PATH = Path(__file__).parent / "true_mas/aws_provider_schemas/aws_provider_schema_5.75.0.json"
 DELIMITERS = ["```hcl", "```json", "```HCL", "```Terraform", "```terraform", "```"]
 # ``` needs to be in the end, as it is a final "else" case
 
@@ -113,6 +114,14 @@ def rag_knowledge(Retriever, query):
         knowledge += f"Context {i}: \n"
         knowledge += c
     return knowledge
+
+def load_provider_schemas():
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return data["provider_schemas"][
+        "registry.terraform.io/hashicorp/aws"
+    ]["resource_schemas"]
 
 
 def build_multi_agent_prompt(knowledge: str, user_prompt: str) -> str:
@@ -545,9 +554,11 @@ def read_models(
     # Read from evaluation dataset file:
     df = pd.read_csv(eval_filepath, header=0)
 
-    # For true-MAS we generate 
+    # For true-MAS we generate
+    aws_provider_schemas = None
     if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
         effgen_model = load_effgen_model(model_name, BASE_URL)
+        aws_provider_schemas = load_provider_schemas()
 
     for index, row in df.iterrows():
         # iterate every row
@@ -562,7 +573,8 @@ def read_models(
             NUM_EXISTING_SAMPLES,
             Retriever,
             uuid_1,
-            effgen_model
+            effgen_model,
+            aws_provider_schemas
         )
 
     df.to_csv(eval_filepath, index=False, encoding="utf-8")
@@ -620,7 +632,8 @@ def model_evaluation(
     NUM_EXISTING_SAMPLES,
     Retriever,
     uuid_1,
-    effgen_model
+    effgen_model,
+    aws_provider_schemas = None
 ):
     """
     Note: Multi-turn implies 2 turns only
@@ -657,6 +670,7 @@ def model_evaluation(
                 aws_docs_context=aws_docs_context,
                 evaluator=eval_pipeline,
                 uuid_1=uuid_1,
+                aws_provider_schemas=aws_provider_schemas
             )
 
             text = result["terraform_code"]
