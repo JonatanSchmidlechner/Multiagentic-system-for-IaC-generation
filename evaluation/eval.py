@@ -313,7 +313,7 @@ def set_huggingface_credentials():
 
 # find each subdirectory
 def list_all_subdirectories_and_eval(
-    data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever, sampled
+    data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, sampled
 ):
     for path, _, _ in os.walk(data_dir):
         subdir = path.removeprefix(
@@ -327,6 +327,20 @@ def list_all_subdirectories_and_eval(
                 print(file_path)
                 # Perform evaluation:
                 for model in EVAL_MODELS:
+                    Retriever = None
+                    effgen_model = None
+                    if PROMPT_ENHANCEMENT_STRAT in ("RAG", "multi-agent", "true-MAS"):
+                            effgen_model = load_effgen_model(
+                                model,
+                                BASE_URL,
+                                api_key=API_KEY
+                            )
+                    
+                            Retriever = llama_index_retriever.Retriever(
+                                stored_index="../retriever/aws-index",
+                                path="../retriever/terraform-provider-aws/website/docs/r",
+                                llm=effgen_model,
+                            )
                     # Note: Do not overwrite existing files, and do not evaluate if file exists already
                     eval_filepath, final_file_path, file_exists, NUM_EXISTING_SAMPLES = (
                         copy_csv_to_evaluation(
@@ -348,7 +362,8 @@ def list_all_subdirectories_and_eval(
                         eval_filepath,
                         final_file_path,
                         Retriever,
-                        sampled
+                        sampled,
+                        effgen_model,
                     )
 
 
@@ -530,7 +545,8 @@ def read_models(
     eval_filepath,
     final_filepath,
     Retriever,
-    sampled
+    sampled,
+    effgen_model
 ):
     # read the first four lines to determine the header
 
@@ -554,7 +570,6 @@ def read_models(
     # For true-MAS we generate
     aws_provider_schemas = None
     if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
-        effgen_model = load_effgen_model(model_name, BASE_URL+"v1", api_key=API_KEY)
         aws_provider_schemas = load_provider_schemas()
 
     for index, row in df.iterrows():
@@ -578,6 +593,12 @@ def read_models(
     df.to_csv(final_filepath, index=False, encoding="utf-8")
 
     logger.info(f"Finished evaluation for {model_name}")
+    import json
+
+    mas_logger.debug(
+        "Timeout stats:\n%s",
+        json.dumps(timeout_stats, indent=2)
+    )
 
 
 def get_plan_result_template():
@@ -670,7 +691,7 @@ def model_evaluation(
                     uuid_1=uuid_1,
                     aws_provider_schemas=aws_provider_schemas,
                 )
-                text = result["terraform_code"]
+                text = result["raw_answer"]
                 x = result["evaluation_result"]
 
             except ModelTimeoutError as e:
@@ -1210,15 +1231,6 @@ def main(
     if "Magicoder_S_CL_7B" in models:
         setup_magicoder_params()
 
-    # Setup retriever:
-    if PROMPT_ENHANCEMENT_STRAT in ("RAG", "multi-agent", "true-MAS"):
-        Retriever = llama_index_retriever.Retriever(
-            stored_index="../retriever/aws-index",
-            path="../retriever/terraform-provider-aws/website/docs/r",
-        )
-    else:
-        Retriever = None
-
     # Import dataset:
     if not quick_test:
         data.import_dataset()
@@ -1235,7 +1247,7 @@ def main(
     # Create evaluation directories for each data directory
     # and perform model evaluation:
     list_all_subdirectories_and_eval(
-        data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever, sampled
+        data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, sampled
     )
 
 

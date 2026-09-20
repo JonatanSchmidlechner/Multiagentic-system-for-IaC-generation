@@ -10,19 +10,13 @@ import json
 from .logger import mas_logger
 
 def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, uuid_1, aws_provider_schemas):
-    print("Retrieved AWS docs context for Planner:")
-    print(aws_docs_context)
     planner_response = planner(model, task_prompt, aws_docs=aws_docs_context)
-    print("Planner response:")
-    print(planner_response.text)
     planner_plan = PlannerPlan.model_validate_json(planner_response.text)
     planner_plan_text = planner_plan.model_dump_json()
     planner_plan_debug = json.dumps(
         planner_plan.model_dump(),
         indent=2
     )
-    print("PLANNER PLAN DEBUG \n\n")
-    print(planner_plan_debug)
     mas_logger.debug("Task prompt:\n%s", task_prompt)
     mas_logger.debug("Retrieved AWS docs:\n%s", aws_docs_context)
     mas_logger.debug("PlannerPlan:\n%s", planner_plan_debug)
@@ -32,8 +26,6 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
         planner_plan_text,
         provider_candidate_schemas_object
     )
-    print("Final I-IR after provider harmonization:")
-    print(provider_harmonizer_response.text)
 
     final_iir = IIRPlan.model_validate_json(provider_harmonizer_response.text)
     final_iir_text = final_iir.model_dump_json()
@@ -41,8 +33,6 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
         final_iir.model_dump(),
         indent=2
     )
-    print("FINAL I-IR PLAN \n\n")
-    print(final_iir_debug)
 
     selected_schema_names = {
         node_id: list(candidates.keys())
@@ -56,8 +46,6 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
     )
     terraform_raw_code = iac_generator_response.text
     answer, terraform_code = separate_answer_and_code(terraform_raw_code, DELIMITERS)
-    print("Initial Terraform code generated: \n\n")
-    print(terraform_code)
     mas_logger.debug("Generated Terraform:\n%s", terraform_code)
     validation = evaluator(
         terraform_code,
@@ -86,8 +74,6 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
             )
         else:
             break
-        print("VALIDATION ERROR \n\n")
-        print(validation_error)
         mas_logger.debug("Validation error:\n%s", validation_error)
         reviewer_response  = reviewer(
             model,
@@ -103,8 +89,6 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
             fix_plan.model_dump(),
             indent=2
         )
-        print("FIX PLAN \n\n")
-        print(fix_plan_debug) 
         mas_logger.debug("FixPlan:\n%s", fix_plan_debug)
 
         iac_generator_response = iac_generator(
@@ -122,7 +106,7 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
                 uuid_1,
         )
         mas_logger.debug("Generated Terraform:\n%s", terraform_code)
-        
+
     mas_logger.info(
         "Final result: terraform_success=%s, opa_result=%s",
         validation["terraform_plan_success"],
@@ -131,4 +115,5 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
     return {
         "terraform_code": terraform_code,
         "evaluation_result": validation,
+        "raw_answer": terraform_raw_code
     }

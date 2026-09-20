@@ -1,7 +1,12 @@
 import logging
 from pathlib import Path
+from datetime import datetime
 
-LOG_PATH = Path(__file__).parent / "true_mas_debug.log"
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+LOG_PATH = LOG_DIR / f"true_mas_debug_{timestamp}.log"
 
 mas_logger = logging.getLogger("true_mas")
 mas_logger.setLevel(logging.DEBUG)

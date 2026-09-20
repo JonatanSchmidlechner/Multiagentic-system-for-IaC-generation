@@ -133,6 +133,60 @@ Final verification rules:
 * Verify that no placeholders, undefined references, or invented infrastructure remain.
 * Verify that the final result is valid Terraform HCL.
 
+EXAMPLE (for guidance only; do NOT copy into your output):
+Example prompt: Create an AWS RDS instance (instance_class db.t2.micro) and do not create a final snapshot before deletion; generate a random identifier suffix and a random password.
+Example output:
+```hcl
+terraform {{
+  required_version = ">= 1.5.0"
+  required_providers {{
+    aws = {{ source = "hashicorp/aws", version = "~> 5.75.0" }}
+    random = {{ source = "hashicorp/random", version = "~> 3.6" }}
+}}
+}}
+
+provider "aws" {{
+  region = var.region
+}}
+
+variable "region" {{
+  type    = string
+  default = "us-east-1"
+}}
+
+locals {{
+  default_tags = {{
+    Owner       = "iac-eval"
+    Environment = "dev"
+    CostCenter  = "1234"
+  }}
+}}
+
+resource "random_id" "suffix" {{
+  byte_length = 4
+}}
+
+resource "random_password" "db" {{
+  length  = 16
+  special = false
+}}
+
+resource "aws_db_instance" "example" {{
+  identifier            = "metricbeat-test-${{random_id.suffix.hex}}"
+  allocated_storage     = 20
+  engine                = "mysql"
+  instance_class        = "db.t2.micro"
+  db_name               = "metricbeattest"
+  username              = "dbadmin"
+  password              = random_password.db.result
+  storage_encrypted     = true
+  publicly_accessible   = false
+  skip_final_snapshot   = true
+  auto_minor_version_upgrade = true
+
+  tags = local.default_tags
+}}
+
 OUTPUT FORMAT (STRICT — FOLLOW EXACTLY):
 - Begin the response with EXACTLY: ```hcl
 - End the response with EXACTLY: ```
