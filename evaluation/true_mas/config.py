@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_URL = os.environ["GPTLAB_BASE_URL"]
-API_KEY = os.environ["GPTLAB_API_KEY"]
+BASE_URL = os.environ["BASE_URL"]
+API_KEY = os.environ["API_KEY"]
 
 MODEL_NAME = "llama3.1:8b"
 MAX_REPAIR_ATTEMPTS = 3
