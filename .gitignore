@@ -6,7 +6,7 @@
 .DS_Store
 data/**/*
 */.DS_Store
-*.env
+.env
 evaluation/terraform_config/.terraform
 */__pycache__/
 retriever/aws-index/

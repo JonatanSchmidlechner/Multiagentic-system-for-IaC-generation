@@ -1,4 +1,4 @@
-from ..schemas import HarmonizationInput, IIRPlan
+from ..schemas import IIRPlan
 from .agent_utils import generate_structured
 import json
 
@@ -7,6 +7,7 @@ def provider_harmonizer(model, planner_plan, provider_schemas_object):
     IIRPlan_schema_text = json.dumps(
         IIRPlan_schema
     )
+    
 
 
     schemas_text = ""
@@ -23,7 +24,7 @@ def provider_harmonizer(model, planner_plan, provider_schemas_object):
 
     schemas_text += "</resource>\n"
 
-    system_prompt = """
+    system_prompt = f"""
 You are the Provider Harmonizer in a multi-agent system that generates Terraform infrastructure.
 
 Pipeline:
@@ -132,6 +133,9 @@ Provider schemas selected for each planned resource:
 Convert the PlannerPlan into the required provider-specific IIRPlan using only the
 supplied provider schemas.
 """.strip()
+
+    print(system_prompt)
+    print(prompt)
     
     return generate_structured(
         model,
@@ -139,4 +143,5 @@ supplied provider schemas.
         system_prompt,
         IIRPlan.model_json_schema(),
         "IIRPlan",
+        agent_name="Provider harmonizer"
     )

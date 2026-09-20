@@ -246,3 +246,46 @@ class IIRPlan(BaseModel):
             "Requirements that must remain true for the infrastructure plan as a whole."
         )
     )
+
+
+# Fix plan for reviewer
+
+class FixItem(BaseModel):
+    node_id: str | None = Field(
+        default=None,
+        description=(
+            "node_id of the I-IR resource or data source that needs repair. "
+            "Use null for configuration-wide issues."
+        )
+    )
+
+    location: str | None = Field(
+        default=None,
+        description=(
+            "Relevant HCL attribute, nested block, reference, provider configuration, "
+            "or other location of the problem. Use null if not applicable."
+        )
+    )
+
+    problem: str = Field(
+        description=(
+            "Concise description of what is wrong in the current Terraform configuration."
+        )
+    )
+
+    fix: str = Field(
+        description=(
+            "Concrete instruction for correcting the problem. "
+            "When possible, include the exact corrected HCL expression, value, "
+            "reference, attribute, or block fragment."
+        )
+    )
+
+
+class FixPlan(BaseModel):
+    fixes: list[FixItem] = Field(
+        description=(
+            "Minimal set of corrections required to make the Terraform configuration "
+            "valid and consistent with the intended infrastructure."
+        )
+    )

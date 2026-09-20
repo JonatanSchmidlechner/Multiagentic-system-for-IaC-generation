@@ -18,9 +18,10 @@ import prompt_templates
 import data
 import math
 from true_mas.pipeline import run_true_mas
-from true_mas.config import BASE_URL
-from true_mas.agents.agent_utils import load_effgen_model
-
+from true_mas.config import BASE_URL, API_KEY
+from true_mas.agents.agent_utils import load_effgen_model, ModelTimeoutError, timeout_stats
+from output_utils import DELIMITERS, separate_answer_and_code
+from true_mas.logger import mas_logger
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "retriever"))
 )
@@ -30,8 +31,6 @@ from typing import List, Tuple
 
 DEFAULT_LOG_FILE = "logs/eval.log"
 SCHEMA_PATH = Path(__file__).parent / "true_mas/aws_provider_schemas/aws_provider_schema_5.75.0.json"
-DELIMITERS = ["```hcl", "```json", "```HCL", "```Terraform", "```terraform", "```"]
-# ``` needs to be in the end, as it is a final "else" case
 
 # Default configurations if not specified
 NUM_SAMPLES_PER_TASK = 20  # n
@@ -104,6 +103,10 @@ def dict_generator(indict, pre=None):
 def rag_knowledge(Retriever, query):
     knowledge = ""
     questions = Retriever.generate_prompt_for_index(query)
+    mas_logger.debug(
+    "RAG retrieval questions:\n%s",
+    "\n".join(f"- {q}" for q in questions),
+    )
     print("Generated questions for RAG retrieval:")
     for q in questions:
         print(f" - {q}")
@@ -308,30 +311,9 @@ def set_huggingface_credentials():
         )
         os.environ["HF_API_TOKEN"] = hf_secret_access_key
 
-
-# split the code for results
-def separate_answer_and_code(text, delimiters=["```hcl"]):
-    for delimiter in delimiters:
-        # split once at the language fence start
-        parts = text.split(delimiter, 1)
-        if len(parts) < 2:
-            # delimiter not found, continue trying others
-            continue
-        # the first part is the answer
-        answer = parts[0].strip()
-        # take content only up to the FIRST closing fence to avoid including Evidence/JSON blocks
-        rest = parts[1]
-        end_idx = rest.find("```")
-        code = rest[:end_idx].strip() if end_idx != -1 else rest.strip()
-        if code != "":
-            return answer, code
-    # fallback: no fences found
-    return text.strip(), ""
-
-
 # find each subdirectory
 def list_all_subdirectories_and_eval(
-    data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever
+    data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever, sampled
 ):
     for path, _, _ in os.walk(data_dir):
         subdir = path.removeprefix(
@@ -354,6 +336,7 @@ def list_all_subdirectories_and_eval(
                             PROMPT_ENHANCEMENT_STRAT,
                             base_eval_dir=base_eval_dir,
                             final_eval_dir=final_eval_dir,
+                            sampled=sampled
                         )
                     )
                     if file_exists:
@@ -365,6 +348,7 @@ def list_all_subdirectories_and_eval(
                         eval_filepath,
                         final_file_path,
                         Retriever,
+                        sampled
                     )
 
 
@@ -458,6 +442,7 @@ def copy_csv_to_evaluation(
     PROMPT_ENHANCEMENT_STRAT,
     base_eval_dir="evaluation/tmp",
     final_eval_dir="results",
+    sampled=False
 ):
     # FIX?: this should be passed in as Path? if we are using Path, we should use it outside instead of os.
     # dataset_file_name = os.path.basename(src_file_path)
@@ -472,6 +457,8 @@ def copy_csv_to_evaluation(
         if PROMPT_ENHANCEMENT_STRAT != ""
         else "{}.csv".format(eval_filename_prefix)
     )
+    if sampled:
+        eval_filename = eval_filename.replace(".csv", "-sampled.csv")
     safe_model_name = model.replace(":", "_") # colon wont work in Windows file names, so replace with underscore
     
     dest_file_path = os.path.join(base_eval_dir, safe_model_name, subdir, eval_filename)
@@ -543,6 +530,7 @@ def read_models(
     eval_filepath,
     final_filepath,
     Retriever,
+    sampled
 ):
     # read the first four lines to determine the header
 
@@ -553,11 +541,24 @@ def read_models(
 
     # Read from evaluation dataset file:
     df = pd.read_csv(eval_filepath, header=0)
+    if sampled:
+        tasks_per_difficulty = 10
+        seed = 42
+        df = (
+            df.groupby("Difficulty", group_keys=False)
+            .sample(n=tasks_per_difficulty, random_state=seed)
+            .sample(frac=1, random_state=seed)
+            .reset_index(drop=True)
+        )
 
     # For true-MAS we generate
     aws_provider_schemas = None
     if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
-        effgen_model = load_effgen_model(model_name, BASE_URL)
+        effgen_model = load_effgen_model(model_name, BASE_URL, api_key=API_KEY)
+
+        print("EffGen model:", type(effgen_model))
+        print("OpenAI client retries:", effgen_model.client.max_retries)
+        print("OpenAI client timeout:", effgen_model.client.timeout)
         aws_provider_schemas = load_provider_schemas()
 
     for index, row in df.iterrows():
@@ -659,22 +660,34 @@ def model_evaluation(
         # ============================================================
         if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
             logger.info(f"Running true-MAS evaluation for sample {i} for model {model_name}")
-
+            mas_logger.info("Running true-MAS: task %d/%d, sample %d/%d",index + 1, len(df), i + 1, NUM_SAMPLES_PER_TASK)
             plain_task_prompt = row["Prompt"]
             aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
 
-            result = run_true_mas(
-                model=effgen_model,
-                task_prompt=plain_task_prompt,
-                policy_file=policy_file,
-                aws_docs_context=aws_docs_context,
-                evaluator=eval_pipeline,
-                uuid_1=uuid_1,
-                aws_provider_schemas=aws_provider_schemas
-            )
+            try:
+                result = run_true_mas(
+                    model=effgen_model,
+                    task_prompt=plain_task_prompt,
+                    policy_file=policy_file,
+                    aws_docs_context=aws_docs_context,
+                    evaluator=eval_pipeline,
+                    uuid_1=uuid_1,
+                    aws_provider_schemas=aws_provider_schemas,
+                )
+                text = result["terraform_code"]
+                x = result["evaluation_result"]
 
-            text = result["terraform_code"]
-            x = result["evaluation_result"]
+            except ModelTimeoutError as e:
+                timeout_stats["failed_tasks"] += 1
+
+                mas_logger.error(
+                    "Task %d failed due to model timeout: %s",
+                    index + 1,
+                    e,
+                )
+                # Use this format for now so that the result written to csv is for sure consistent.
+                text = ""
+                x = empty_code_error()
 
             logger.info(f"Model raw output: {text}")
             df.at[index, "LLM Output #" + str(i)] = text
@@ -1153,9 +1166,14 @@ def setup_magicoder_params():
     help=f"Prompt enhancement strategy. Available strategies: {' '.join(PROMPT_ENHANCEMENT_STRATS)}",
     default="",
 )
+@click.option(
+    "--sampled",
+    is_flag=True,
+    help="Use a balanced sampled subset of the dataset.",
+)
 # @click.argument("enhance_strat", nargs=1, type=str, default="")
 def main(
-    samples: int, models: List[str], config: Path, log_file: Path, enhance_strat: str, quick_test: bool
+    samples: int, models: List[str], config: Path, log_file: Path, enhance_strat: str, quick_test: bool, sampled: bool
 ):
     """
     Evaluate models.
@@ -1221,7 +1239,7 @@ def main(
     # Create evaluation directories for each data directory
     # and perform model evaluation:
     list_all_subdirectories_and_eval(
-        data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever
+        data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, Retriever, sampled
     )
 
 
