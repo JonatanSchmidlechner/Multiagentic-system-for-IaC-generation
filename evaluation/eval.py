@@ -555,10 +555,6 @@ def read_models(
     aws_provider_schemas = None
     if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
         effgen_model = load_effgen_model(model_name, BASE_URL, api_key=API_KEY)
-
-        print("EffGen model:", type(effgen_model))
-        print("OpenAI client retries:", effgen_model.client.max_retries)
-        print("OpenAI client timeout:", effgen_model.client.timeout)
         aws_provider_schemas = load_provider_schemas()
 
     for index, row in df.iterrows():
