@@ -179,7 +179,7 @@ def load_effgen_model(model_name, base_url, api_key):
         model_name,
         provider="openai_compatible",
         base_url=base_url,
-        api_key=api_key
+        api_key=api_key,
         timeout=480, #8min
         max_retries=0
     )
