@@ -554,7 +554,7 @@ def read_models(
     # For true-MAS we generate
     aws_provider_schemas = None
     if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
-        effgen_model = load_effgen_model(model_name, BASE_URL, api_key=API_KEY)
+        effgen_model = load_effgen_model(model_name, BASE_URL+"v1", api_key=API_KEY)
         aws_provider_schemas = load_provider_schemas()
 
     for index, row in df.iterrows():

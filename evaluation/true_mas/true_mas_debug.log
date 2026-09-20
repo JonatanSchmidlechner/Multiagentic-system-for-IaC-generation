@@ -24247,3 +24247,710 @@ Only 1 labels (name) are expected for provider blocks.
 }
 2026-09-20 16:30:13,691 - WARNING - iac-generator timed out. Retrying 1/2
 2026-09-20 16:38:18,751 - WARNING - iac-generator timed out. Retrying 2/2
+2026-09-20 16:46:23,872 - ERROR - iac-generator failed after 2 timeout retries
+2026-09-20 16:46:23,875 - ERROR - Task 48 failed due to model timeout: iac-generator timed out after 3 attempts
+2026-09-20 16:46:23,895 - INFO - Running true-MAS: task 49/60, sample 1/1
+2026-09-20 16:47:12,684 - DEBUG - RAG retrieval questions:
+- Here are 10 search queries related to the input query:
+- 
+- 1. How to create a VPC with multiple subnets in AWS
+- 2. Best practices for designing a public and private subnet architecture in AWS
+- 3. How to launch an EC2 instance in a public subnet and run a web server on it
+- 4. Tips for setting up a secure EC2 instance in a private subnet running application servers
+- 5. Steps to create an RDS instance in a private subnet and use it as a database
+- 6. Subnet association and VPC configuration for running EC2 instances and RDS instances
+- 7. AWS best practices for deploying web servers and application servers in different subnets
+- 8. How to use security groups to secure EC2 instances in public and private subnets
+- 9. Designing a subnet architecture for high availability and scalability in AWS
+- 10. How to troubleshoot EC2 instance and RDS instance connectivity issues in a VPC with multiple subnets
+2026-09-20 16:47:45,471 - DEBUG - Task prompt:
+Create VPC with three subnets: one public subnet and two private subnets. Create an EC2 instance in the public subnet running web servers, an EC2 instance in the private subnet running the application servers, and an RDS instance in the other private subnet serving as the database.
+2026-09-20 16:47:45,471 - DEBUG - Retrieved AWS docs:
+Context 0: 
+---
+subcategory: "EC2 (Elastic Compute Cloud)"
+layout: "aws"
+page_title: "AWS: aws_ec2_secondary_subnet"
+description: |-
+  Provides an EC2 Secondary Subnet resource.
+---
+
+# Resource: aws_ec2_secondary_subnet
+
+Provides an EC2 Secondary Subnet resource.
+
+A secondary subnet is a subnet within a secondary network that provides high-performance networking capabilities for specialized workloads such as RDMA (Remote Direct Memory Access) applications.
+
+## Example Usage
+
+### Basic Usage
+
+```terraform
+resource "aws_ec2_secondary_network" "example" {
+  ipv4_cidr_block = "10.0.0.0/16"
+  network_type    = "rdma"
+
+  tags = {
+    Name = "example-secondary-network"
+  }
+}
+
+resource "aws_ec2_secondary_subnet" "example" {
+  secondary_network_id = aws_ec2_secondary_network.example.id
+  ipv4_cidr_block      = "10.0.1.0/24"
+  availability_zone    = "us-west-2a"
+
+  tags = {
+    Name = "example-secondary-subnet"
+  }
+}
+```
+
+### Using Availability Zone ID
+
+```terraform
+data "aws_availability_zones" "available" {
+  state = "available"
+
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
+
+resource "aws_ec2_secondary_network" "example" {
+  ipv4_cidr_block = "10.0.0.0/16"
+  network_type    = "rdma"
+
+  tags = {
+    Name = "example-secondary-network"
+  }
+}
+
+resourceContext 1: 
+* `records_ingested` - Number of records ingested for a single scheduled query run.
+    * `failure_reason` - Error message for the scheduled query in case of failure. You might have to look at the error report to get more detailed error reasons.
+    * `invocation_time` - InvocationTime for this run. This is the time at which the query is scheduled to run. Parameter `@scheduled_runtime` can be used in the query to get the value.
+    * `query_insights_response` - Provides various insights and metrics related to the run summary of the scheduled query.
+        * `output_bytes` - Size of query result set in bytes. You can use this data to validate if the result set has changed as part of the query tuning exercise.
+        * `output_rows` - Total number of rows returned as part of the query result set. You can use this data to validate if the number of rows in the result set have changed as part of the query tuning exercise.
+        * `query_spatial_coverage` - Insights into the spatial coverage of the query, including the table with sub-optimal (max) spatial pruning. This information can help you identify areas for improvement in your partitioning strategy to enhance spatial pruning.
+            * `max` - Insights into the spatial coverage of the executed query and the table with the most inefficient spatial pruning.
+                * `partition_key` - Partition key used for partitioning, which can be a default measure_name or a customer defined partition key.Context 2: 
+The name of the database to create when the DB instance is created. If this parameter is not specified, no database is created in the DB instance. Note that this does not apply for Oracle or SQL Server engines. See the [AWS documentation](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/create-db-instance.html) for more details on what applies for those engines. If you are providing an Oracle db name, it needs to be in all upper case. Cannot be specified for a replica.
+* `db_subnet_group_name` - (Optional) Name of [DB subnet group](/docs/providers/aws/r/db_subnet_group.html).
+  DB instance will be created in the VPC associated with the DB subnet group.
+  If unspecified, will be created in the `default` Subnet Group.
+  When working with read replicas created in the same region, defaults to the Subnet Group Name of the source DB.
+  When working with read replicas created in a different region, defaults to the `default` Subnet Group.
+  See [DBSubnetGroupName in API action CreateDBInstanceReadReplica](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstanceReadReplica.html) for additional read replica constraints.
+* `dedicated_log_volume` - (Optional, boolean) Use a dedicated log volume (DLV) for the DB instance. Requires Provisioned IOPS. See the [AWS documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIOPS.StorageTypes.html#USER_PIOPS.dlv) for more details.
+* `delete_automated_backups` - (Optional) Specifies whether to remove automated backups immediately after the DB instance is deleted. Default is `true`.
+* `deletion_protection` -Context 3: 
+---
+subcategory: "VPC (Virtual Private Cloud)"
+layout: "aws"
+page_title: "AWS: aws_nat_gateway"
+description: |-
+  Provides a resource to create a VPC NAT Gateway.
+---
+
+# Resource: aws_nat_gateway
+
+Provides a resource to create a VPC NAT Gateway.
+
+!> **WARNING:** You should not use the `aws_nat_gateway` resource that has `secondary_allocation_ids` in conjunction with an [`aws_nat_gateway_eip_association`](nat_gateway_eip_association.html) resource. Doing so may cause perpetual differences, and result in associations being overwritten.
+
+## Example Usage
+
+### Public NAT
+
+```terraform
+resource "aws_nat_gateway" "example" {
+  allocation_id = aws_eip.example.id
+  subnet_id     = aws_subnet.example.id
+
+  tags = {
+    Name = "gw NAT"
+  }
+
+  # To ensure proper ordering, it is recommended to add an explicit dependency
+  # on the Internet Gateway for the VPC.
+  depends_on = [aws_internet_gateway.example]
+}
+```
+
+### Public NAT with Secondary Private IP Addresses
+
+```terraform
+resource "aws_nat_gateway" "example" {
+  allocation_id                  = aws_eip.example.id
+  subnet_id                      = aws_subnet.example.id
+  secondary_allocation_ids       = [aws_eip.secondary.id]
+  secondary_private_ip_addresses = ["10.0.1.5"]
+}
+```
+
+### Private NAT
+
+```terraform
+resource "aws_nat_gateway" "example" {
+  connectivity_type = "private"
+  subnet_id
+2026-09-20 16:47:45,472 - DEBUG - PlannerPlan:
+{
+  "resources": [
+    {
+      "node_id": "vpc-123",
+      "kind": "VPC",
+      "resource_type_candidate": "aws_vpc",
+      "keywords": [
+        "VPC",
+        "EC2",
+        "RDS"
+      ],
+      "properties": {
+        "cidr_block": "10.0.0.0/16"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-1",
+      "kind": "Public Subnet",
+      "resource_type_candidate": "aws_subnet",
+      "keywords": [
+        "public",
+        "EC2"
+      ],
+      "properties": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.1.0/24",
+        "availability_zone": "us-west-2a"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-2",
+      "kind": "Private Subnet",
+      "resource_type_candidate": "aws_subnet",
+      "keywords": [
+        "private",
+        "RDS"
+      ],
+      "properties": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.2.0/24",
+        "availability_zone": "us-west-2b"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-3",
+      "kind": "Private Subnet",
+      "resource_type_candidate": "aws_subnet",
+      "keywords": [
+        "private",
+        "RDS"
+      ],
+      "properties": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.3.0/24",
+        "availability_zone": "us-west-2c"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "ec2-1",
+      "kind": "EC2 Instance",
+      "resource_type_candidate": "aws_instance",
+      "keywords": [
+        "EC2",
+        "web"
+      ],
+      "properties": {
+        "ami": "ami-123",
+        "instance_type": "t2.micro",
+        "subnet_id": "subnet-1"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "ec2-2",
+      "kind": "EC2 Instance",
+      "resource_type_candidate": "aws_instance",
+      "keywords": [
+        "EC2",
+        "app"
+      ],
+      "properties": {
+        "ami": "ami-123",
+        "instance_type": "t2.micro",
+        "subnet_id": "subnet-2"
+      },
+      "constraints": []
+    },
+    {
+      "node_id": "rds-1",
+      "kind": "RDS Instance",
+      "resource_type_candidate": "aws_db_instance",
+      "keywords": [
+        "RDS",
+        "database"
+      ],
+      "properties": {
+        "engine": "mysql",
+        "instance_class": "db.t2.micro",
+        "subnet_id": "subnet-3"
+      },
+      "constraints": []
+    }
+  ],
+  "relations": [
+    {
+      "source": "vpc-123",
+      "target": "subnet-1",
+      "relation": "contains",
+      "source_attribute_hint": "vpc_id",
+      "target_attribute_hint": "vpc_id"
+    },
+    {
+      "source": "vpc-123",
+      "target": "subnet-2",
+      "relation": "contains",
+      "source_attribute_hint": "vpc_id",
+      "target_attribute_hint": "vpc_id"
+    },
+    {
+      "source": "vpc-123",
+      "target": "subnet-3",
+      "relation": "contains",
+      "source_attribute_hint": "vpc_id",
+      "target_attribute_hint": "vpc_id"
+    },
+    {
+      "source": "subnet-1",
+      "target": "ec2-1",
+      "relation": "contains",
+      "source_attribute_hint": "subnet_id",
+      "target_attribute_hint": "subnet_id"
+    },
+    {
+      "source": "subnet-2",
+      "target": "ec2-2",
+      "relation": "contains",
+      "source_attribute_hint": "subnet_id",
+      "target_attribute_hint": "subnet_id"
+    },
+    {
+      "source": "subnet-3",
+      "target": "rds-1",
+      "relation": "contains",
+      "source_attribute_hint": "subnet_id",
+      "target_attribute_hint": "subnet_id"
+    }
+  ],
+  "global_constraints": []
+}
+2026-09-20 16:48:11,356 - DEBUG - Selected provider schemas: {'vpc-123': ['aws_vpc'], 'subnet-1': ['aws_subnet'], 'subnet-2': ['aws_subnet'], 'subnet-3': ['aws_subnet'], 'ec2-1': ['aws_instance'], 'ec2-2': ['aws_instance'], 'rds-1': ['aws_db_instance']}
+2026-09-20 16:48:11,356 - DEBUG - Final IIR:
+{
+  "resources": [
+    {
+      "node_id": "vpc-123",
+      "mode": "resource",
+      "resource_type": "aws_vpc",
+      "region": null,
+      "attributes": {
+        "cidr_block": "10.0.0.0/16"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-1",
+      "mode": "resource",
+      "resource_type": "aws_subnet",
+      "region": null,
+      "attributes": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.1.0/24",
+        "availability_zone": "us-west-2a"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-2",
+      "mode": "resource",
+      "resource_type": "aws_subnet",
+      "region": null,
+      "attributes": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.2.0/24",
+        "availability_zone": "us-west-2b"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "subnet-3",
+      "mode": "resource",
+      "resource_type": "aws_subnet",
+      "region": null,
+      "attributes": {
+        "vpc_id": "vpc-123",
+        "cidr_block": "10.0.3.0/24",
+        "availability_zone": "us-west-2c"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "ec2-1",
+      "mode": "resource",
+      "resource_type": "aws_instance",
+      "region": null,
+      "attributes": {
+        "ami": "ami-123",
+        "instance_type": "t2.micro",
+        "subnet_id": "subnet-1"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "ec2-2",
+      "mode": "resource",
+      "resource_type": "aws_instance",
+      "region": null,
+      "attributes": {
+        "ami": "ami-123",
+        "instance_type": "t2.micro",
+        "subnet_id": "subnet-2"
+      },
+      "blocks": {},
+      "constraints": []
+    },
+    {
+      "node_id": "rds-1",
+      "mode": "resource",
+      "resource_type": "aws_db_instance",
+      "region": null,
+      "attributes": {
+        "engine": "mysql",
+        "instance_class": "db.t2.micro",
+        "subnet_id": "subnet-3"
+      },
+      "blocks": {},
+      "constraints": []
+    }
+  ],
+  "dependencies": [],
+  "global_constraints": []
+}
+2026-09-20 16:48:26,252 - DEBUG - Generated Terraform:
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "= 5.75.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" "us-west-2" {
+  alias  = "us-west-2"
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "vpc-123" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_subnet" "subnet-1" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-west-2a"
+}
+
+resource "aws_subnet" "subnet-2" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-west-2b"
+}
+
+resource "aws_subnet" "subnet-3" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-west-2c"
+}
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-1.id
+}
+
+resource "aws_instance" "ec2-2" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-2.id
+}
+
+resource "aws_db_instance" "rds-1" {
+  engine             = "mysql"
+  instance_class     = "db.t2.micro"
+  subnet_id          = aws_subnet.subnet-3.id
+}
+2026-09-20 16:48:26,621 - INFO - Terraform validation failed on repair attempt 0
+2026-09-20 16:48:26,622 - DEBUG - Validation error:
+
+Error: Extraneous label for provider
+
+  on main.tf line 14, in provider "aws" "us-west-2":
+  14: provider "aws" "us-west-2" {
+
+Only 1 labels (name) are expected for provider blocks.
+
+2026-09-20 16:48:30,407 - DEBUG - FixPlan:
+{
+  "fixes": [
+    {
+      "node_id": null,
+      "location": "provider block in main.tf",
+      "problem": "Extraneous label for provider",
+      "fix": "Remove the alias from the provider block, as it is not necessary and causes the error."
+    }
+  ]
+}
+2026-09-20 16:49:08,291 - DEBUG - Generated Terraform:
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "= 5.75.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_vpc" "vpc-123" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_subnet" "subnet-1" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-west-2a"
+}
+
+resource "aws_subnet" "subnet-2" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-west-2b"
+}
+
+resource "aws_subnet" "subnet-3" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-west-2c"
+}
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-1.id
+}
+
+resource "aws_instance" "ec2-2" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-2.id
+}
+
+resource "aws_db_instance" "rds-1" {
+  engine             = "mysql"
+  instance_class     = "db.t2.micro"
+  subnet_id          = aws_subnet.subnet-3.id
+}
+2026-09-20 16:49:08,291 - INFO - Terraform validation failed on repair attempt 1
+2026-09-20 16:49:08,291 - DEBUG - Validation error:
+
+Error: Unsupported argument
+
+  on main.tf line 51, in resource "aws_db_instance" "rds-1":
+  51:   subnet_id          = aws_subnet.subnet-3.id
+
+An argument named "subnet_id" is not expected here.
+
+2026-09-20 16:49:11,886 - DEBUG - FixPlan:
+{
+  "fixes": [
+    {
+      "node_id": "rds-1",
+      "location": "resource 'aws_db_instance' 'rds-1' attribute 'subnet_id'",
+      "problem": "The 'subnet_id' argument is not supported for 'aws_db_instance'.",
+      "fix": "Use 'vpc_security_group_ids' instead of 'subnet_id' for 'aws_db_instance'."
+    }
+  ]
+}
+2026-09-20 16:49:50,450 - DEBUG - Generated Terraform:
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "= 5.75.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_vpc" "vpc-123" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_subnet" "subnet-1" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-west-2a"
+}
+
+resource "aws_subnet" "subnet-2" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-west-2b"
+}
+
+resource "aws_subnet" "subnet-3" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-west-2c"
+}
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-1.id
+}
+
+resource "aws_instance" "ec2-2" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-2.id
+}
+
+resource "aws_db_instance" "rds-1" {
+  engine             = "mysql"
+  instance_class     = "db.t2.micro"
+  vpc_security_group_ids = [aws_vpc.vpc-123.default_security_group_id]
+}
+2026-09-20 16:49:50,450 - INFO - OPA validation failed on repair attempt 2
+2026-09-20 16:49:50,450 - DEBUG - Validation error:
+Rule violation found. OPA complete output logged here: {'result': [{'expressions': [{'value': {'main': {'allow': False, 'aws_instances': [{'address': 'aws_instance.ec2-1', 'change': {'actions': ['create'], 'after': {'ami': 'ami-123', 'credit_specification': [], 'get_password_data': False, 'hibernation': None, 'instance_type': 't2.micro', 'launch_template': [], 'source_dest_check': True, 'tags': None, 'timeouts': None, 'user_data_replace_on_change': False, 'volume_tags': None}, 'after_sensitive': {'capacity_reservation_specification': [], 'cpu_options': [], 'credit_specification': [], 'ebs_block_device': [], 'enclave_options': [], 'ephemeral_block_device': [], 'instance_market_options': [], 'ipv6_addresses': [], 'launch_template': [], 'maintenance_options': [], 'metadata_options': [], 'network_interface': [], 'private_dns_name_options': [], 'root_block_device': [], 'secondary_private_ips': [], 'security_groups': [], 'tags_all': {}, 'vpc_security_group_ids': []}, 'after_unknown': {'arn': True, 'associate_public_ip_address': True, 'availability_zone': True, 'capacity_reservation_specification': True, 'cpu_core_count': True, 'cpu_options': True, 'cpu_threads_per_core': True, 'credit_specification': [], 'disable_api_stop': True, 'disable_api_termination': True, 'ebs_block_device': True, 'ebs_optimized': True, 'enclave_options': True, 'ephemeral_block_device': True, 'host_id': True, 'host_resource_group_arn': True, 'iam_instance_profile': True, 'id': True, 'instance_initiated_shutdown_behavior': True, 'instance_lifecycle': True, 'instance_market_options': True, 'instance_state': True, 'ipv6_address_count': True, 'ipv6_addresses': True, 'key_name': True, 'launch_template': [], 'maintenance_options': True, 'metadata_options': True, 'monitoring': True, 'network_interface': True, 'outpost_arn': True, 'password_data': True, 'placement_group': True, 'placement_partition_number': True, 'primary_network_interface_id': True, 'private_dns': True, 'private_dns_name_options': True, 'private_ip': True, 'public_dns': True, 'public_ip': True, 'root_block_device': True, 'secondary_private_ips': True, 'security_groups': True, 'spot_instance_request_id': True, 'subnet_id': True, 'tags_all': True, 'tenancy': True, 'user_data': True, 'user_data_base64': True, 'vpc_security_group_ids': True}, 'before': None, 'before_sensitive': False}, 'mode': 'managed', 'name': 'ec2-1', 'provider_name': 'registry.terraform.io/hashicorp/aws', 'type': 'aws_instance'}, {'address': 'aws_instance.ec2-2', 'change': {'actions': ['create'], 'after': {'ami': 'ami-123', 'credit_specification': [], 'get_password_data': False, 'hibernation': None, 'instance_type': 't2.micro', 'launch_template': [], 'source_dest_check': True, 'tags': None, 'timeouts': None, 'user_data_replace_on_change': False, 'volume_tags': None}, 'after_sensitive': {'capacity_reservation_specification': [], 'cpu_options': [], 'credit_specification': [], 'ebs_block_device': [], 'enclave_options': [], 'ephemeral_block_device': [], 'instance_market_options': [], 'ipv6_addresses': [], 'launch_template': [], 'maintenance_options': [], 'metadata_options': [], 'network_interface': [], 'private_dns_name_options': [], 'root_block_device': [], 'secondary_private_ips': [], 'security_groups': [], 'tags_all': {}, 'vpc_security_group_ids': []}, 'after_unknown': {'arn': True, 'associate_public_ip_address': True, 'availability_zone': True, 'capacity_reservation_specification': True, 'cpu_core_count': True, 'cpu_options': True, 'cpu_threads_per_core': True, 'credit_specification': [], 'disable_api_stop': True, 'disable_api_termination': True, 'ebs_block_device': True, 'ebs_optimized': True, 'enclave_options': True, 'ephemeral_block_device': True, 'host_id': True, 'host_resource_group_arn': True, 'iam_instance_profile': True, 'id': True, 'instance_initiated_shutdown_behavior': True, 'instance_lifecycle': True, 'instance_market_options': True, 'instance_state': True, 'ipv6_address_count': True, 'ipv6_addresses': True, 'key_name': True, 'launch_template': [], 'maintenance_options': True, 'metadata_options': True, 'monitoring': True, 'network_interface': True, 'outpost_arn': True, 'password_data': True, 'placement_group': True, 'placement_partition_number': True, 'primary_network_interface_id': True, 'private_dns': True, 'private_dns_name_options': True, 'private_ip': True, 'public_dns': True, 'public_ip': True, 'root_block_device': True, 'secondary_private_ips': True, 'security_groups': True, 'spot_instance_request_id': True, 'subnet_id': True, 'tags_all': True, 'tenancy': True, 'user_data': True, 'user_data_base64': True, 'vpc_security_group_ids': True}, 'before': None, 'before_sensitive': False}, 'mode': 'managed', 'name': 'ec2-2', 'provider_name': 'registry.terraform.io/hashicorp/aws', 'type': 'aws_instance'}], 'private_subnet_exists': [{'address': 'aws_subnet.subnet-1', 'change': {'actions': ['create'], 'after': {'assign_ipv6_address_on_creation': False, 'availability_zone': 'us-west-2a', 'cidr_block': '10.0.1.0/24', 'customer_owned_ipv4_pool': None, 'enable_dns64': False, 'enable_lni_at_device_index': None, 'enable_resource_name_dns_a_record_on_launch': False, 'enable_resource_name_dns_aaaa_record_on_launch': False, 'ipv6_cidr_block': None, 'ipv6_native': False, 'map_customer_owned_ip_on_launch': None, 'map_public_ip_on_launch': False, 'outpost_arn': None, 'tags': None, 'timeouts': None}, 'after_sensitive': {'tags_all': {}}, 'after_unknown': {'arn': True, 'availability_zone_id': True, 'id': True, 'ipv6_cidr_block_association_id': True, 'owner_id': True, 'private_dns_hostname_type_on_launch': True, 'tags_all': True, 'vpc_id': True}, 'before': None, 'before_sensitive': False}, 'mode': 'managed', 'name': 'subnet-1', 'provider_name': 'registry.terraform.io/hashicorp/aws', 'type': 'aws_subnet'}, {'address': 'aws_subnet.subnet-2', 'change': {'actions': ['create'], 'after': {'assign_ipv6_address_on_creation': False, 'availability_zone': 'us-west-2b', 'cidr_block': '10.0.2.0/24', 'customer_owned_ipv4_pool': None, 'enable_dns64': False, 'enable_lni_at_device_index': None, 'enable_resource_name_dns_a_record_on_launch': False, 'enable_resource_name_dns_aaaa_record_on_launch': False, 'ipv6_cidr_block': None, 'ipv6_native': False, 'map_customer_owned_ip_on_launch': None, 'map_public_ip_on_launch': False, 'outpost_arn': None, 'tags': None, 'timeouts': None}, 'after_sensitive': {'tags_all': {}}, 'after_unknown': {'arn': True, 'availability_zone_id': True, 'id': True, 'ipv6_cidr_block_association_id': True, 'owner_id': True, 'private_dns_hostname_type_on_launch': True, 'tags_all': True, 'vpc_id': True}, 'before': None, 'before_sensitive': False}, 'mode': 'managed', 'name': 'subnet-2', 'provider_name': 'registry.terraform.io/hashicorp/aws', 'type': 'aws_subnet'}, {'address': 'aws_subnet.subnet-3', 'change': {'actions': ['create'], 'after': {'assign_ipv6_address_on_creation': False, 'availability_zone': 'us-west-2c', 'cidr_block': '10.0.3.0/24', 'customer_owned_ipv4_pool': None, 'enable_dns64': False, 'enable_lni_at_device_index': None, 'enable_resource_name_dns_a_record_on_launch': False, 'enable_resource_name_dns_aaaa_record_on_launch': False, 'ipv6_cidr_block': None, 'ipv6_native': False, 'map_customer_owned_ip_on_launch': None, 'map_public_ip_on_launch': False, 'outpost_arn': None, 'tags': None, 'timeouts': None}, 'after_sensitive': {'tags_all': {}}, 'after_unknown': {'arn': True, 'availability_zone_id': True, 'id': True, 'ipv6_cidr_block_association_id': True, 'owner_id': True, 'private_dns_hostname_type_on_launch': True, 'tags_all': True, 'vpc_id': True}, 'before': None, 'before_sensitive': False}, 'mode': 'managed', 'name': 'subnet-3', 'provider_name': 'registry.terraform.io/hashicorp/aws', 'type': 'aws_subnet'}]}}, 'text': 'data', 'location': {'row': 1, 'col': 1}}]}]}
+2026-09-20 16:50:03,415 - DEBUG - FixPlan:
+{
+  "fixes": [
+    {
+      "node_id": null,
+      "location": null,
+      "problem": "The region specified in the provider configuration does not match the region of the resources.",
+      "fix": "Change the region in the provider configuration to match the region of the resources. Update the provider configuration to `region = \"us-west-2\"`."
+    },
+    {
+      "node_id": null,
+      "location": null,
+      "problem": "The VPC ID in the subnet resources does not match the VPC ID in the VPC resource.",
+      "fix": "Update the VPC ID in the subnet resources to match the VPC ID in the VPC resource. Update the subnet resources to `vpc_id = aws_vpc.vpc-123.id`."
+    },
+    {
+      "node_id": null,
+      "location": null,
+      "problem": "The subnet resources have different availability zones than the VPC resource.",
+      "fix": "Update the subnet resources to have the same availability zones as the VPC resource. Update the subnet resources to `availability_zone = aws_vpc.vpc-123.availability_zone`."
+    },
+    {
+      "node_id": null,
+      "location": null,
+      "problem": "The RDS instance is referencing the VPC's default security group, but the VPC resource does not have a default security group.",
+      "fix": "Update the RDS instance to reference the VPC's default security group. Update the RDS instance to `vpc_security_group_ids = [aws_vpc.vpc-123.default_security_group_id]`."
+    }
+  ]
+}
+2026-09-20 16:50:41,878 - DEBUG - Generated Terraform:
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "= 5.75.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_vpc" "vpc-123" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_subnet" "subnet-1" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = aws_vpc.vpc-123.availability_zone
+}
+
+resource "aws_subnet" "subnet-2" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = aws_vpc.vpc-123.availability_zone
+}
+
+resource "aws_subnet" "subnet-3" {
+  vpc_id            = aws_vpc.vpc-123.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = aws_vpc.vpc-123.availability_zone
+}
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-1.id
+}
+
+resource "aws_instance" "ec2-2" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.subnet-2.id
+}
+
+resource "aws_db_instance" "rds-1" {
+  engine             = "mysql"
+  instance_class     = "db.t2.micro"
+  vpc_security_group_ids = [aws_vpc.vpc-123.default_security_group_id]
+}
+2026-09-20 16:50:41,878 - INFO - Final result: terraform_success=False, opa_result=No opa_result
+2026-09-20 16:50:41,939 - INFO - Running true-MAS: task 50/60, sample 1/1
+2026-09-20 16:51:35,325 - DEBUG - RAG retrieval questions:
+- Here are the 10 search queries related to the input query "Create two AWS VPCs and establish a peering connection between them":
+- 
+- 1. How to create two AWS VPCs in different regions
+- 2. Peering connection between two AWS VPCs Terraform configuration
+- 3. AWS VPC peering connection best practices for multi-account setup
+- 4. Creating a VPC peering connection between two AWS accounts
+- 5. Terraform module for creating and configuring AWS VPC peering connections
+- 6. AWS VPC peering connection requirements and limitations
+- 7. How to establish a secure VPC peering connection in AWS
+- 8. AWS VPC peering connection and DNS resolution considerations
+- 9. Terraform example for creating two AWS VPCs and establishing a peering connection
+- 10. AWS VPC peering connection troubleshooting and common issues
