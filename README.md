@@ -39,7 +39,7 @@ python3 eval.py --config=config.json -e true-MAS --quick-test
    ```
 config.json contains the used model name and sample size.
 
-NOTE: The pipeline can not be ran if there are existing evaluation results for the same model in tmp/ or in results/.
+NOTE: The pipeline can not be run if there are existing evaluation results for the same model in tmp/ or in results/.
 
 2. Get evaluation results by running the following script:
 ```shell
