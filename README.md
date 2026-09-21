@@ -30,18 +30,21 @@ See more instructions in `evaluation/README.md` for more details about scripts.
 All commands assume you are in the `evaluation` directory, and that you have activated the env:
 
 1. Script to run true-MAS using a medium sized subset of the dataset. Remove --sampled to use the whole dataset.
+```shell
 python3 eval.py --config=config.json -e true-MAS --sampled
-
+   ```
 Use --quick-test to test the pipeline with 2 dataset rows.
+```shell
 python3 eval.py --config=config.json -e true-MAS --quick-test
-
+   ```
 config.json contains the used model name and sample size.
 
 NOTE: The pipeline can not be ran if there are existing evaluation results for the same model in tmp/ or in results/.
 
 2. Get evaluation results by running the following script:
+```shell
 python3 misc/ablation/ablation-iac-eval-pipeline.py
-
+   ```
 3. See the TRUE-MAS specific logs in true_mas/true_mas_debug.log.
 ## Installation
 
