@@ -21,6 +21,7 @@ Use the following command in project root:
    conda env create -f environment-py311.yml
    ```
 Note: before `conda activate` you might need to do `conda init SHELL_NAME` on your preferred shell (e.g. `conda init bash`). If you run into problems initializing the shell session, try referring to [this GitHub issue](https://github.com/conda/conda/issues/13423#issuecomment-2113968807) for a fix.
+
 6. Preconfigure the retriever database: refer to instructions in `retriever/README.md`.
 7. Create .env file to repository root and add the API_KEY and BASE_URL according to the .env_example
 
