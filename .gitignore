@@ -20,5 +20,6 @@ evaluation/misc/complete-dataset-measurement/rego_config/*
 evaluation/misc/ablation/terraform_config/*
 evaluation/results/*
 evaluation/logs/*
+evaluation/true_mas/logs
 __pycache__/
 *.pyc

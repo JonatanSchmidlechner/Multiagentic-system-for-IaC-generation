@@ -4,6 +4,7 @@ import csv
 import sys
 from pathlib import Path
 from openai import OpenAI
+from pydantic import ValidationError
 import numpy as np
 import pandas as pd
 import subprocess
@@ -18,8 +19,8 @@ import prompt_templates
 import data
 import math
 from true_mas.pipeline import run_true_mas
-from true_mas.config import BASE_URL, API_KEY
-from true_mas.agents.agent_utils import load_effgen_model, ModelTimeoutError, timeout_stats
+from true_mas.config import BASE_URL, API_KEY, TEXT_GENERATION_MAX_TOKENS
+from true_mas.agents.agent_utils import load_effgen_model, ModelTimeoutError, ModelOutputError, timeout_stats, generate
 from output_utils import DELIMITERS, separate_answer_and_code
 from true_mas.logger import mas_logger
 sys.path.append(
@@ -28,6 +29,9 @@ sys.path.append(
 import llama_index_retriever
 import click
 from typing import List, Tuple
+
+# Failed samples by category (not individual retry attempts).
+failure_stats = {}
 
 DEFAULT_LOG_FILE = "logs/eval.log"
 SCHEMA_PATH = Path(__file__).parent / "true_mas/aws_provider_schemas/aws_provider_schema_5.75.0.json"
@@ -340,6 +344,8 @@ def list_all_subdirectories_and_eval(
                                 stored_index="../retriever/aws-index",
                                 path="../retriever/terraform-provider-aws/website/docs/r",
                                 llm=effgen_model,
+                                max_tokens=TEXT_GENERATION_MAX_TOKENS,
+                                generate_fn = generate,
                             )
                     # Note: Do not overwrite existing files, and do not evaluate if file exists already
                     eval_filepath, final_file_path, file_exists, NUM_EXISTING_SAMPLES = (
@@ -588,17 +594,14 @@ def read_models(
             effgen_model,
             aws_provider_schemas
         )
+        df.to_csv(eval_filepath, index=False, encoding="utf-8")
 
     df.to_csv(eval_filepath, index=False, encoding="utf-8")
     df.to_csv(final_filepath, index=False, encoding="utf-8")
 
     logger.info(f"Finished evaluation for {model_name}")
-    import json
+    logger.warning("Cumulative failed samples by category: %s", failure_stats)
 
-    mas_logger.debug(
-        "Timeout stats:\n%s",
-        json.dumps(timeout_stats, indent=2)
-    )
 
 
 def get_plan_result_template():
@@ -640,6 +643,21 @@ def prompt_enhancements(prompt, PROMPT_ENHANCEMENT_STRAT, Retriever):
     return prompt
 
 
+def record_failure(category, error, task_index, sample_index):
+    """Log a failed sample and return the result to store in the CSV."""
+    failure_stats[category] = failure_stats.get(category, 0) + 1
+    mas_logger.error(
+        "Task %d, sample %d failed [%s]: %s",
+        task_index + 1, sample_index + 1, category, error,
+        exc_info=True,
+    )
+    result = get_plan_result_template()
+    result["opa_evaluation_result"] = "Failure"
+    result["terraform_plan_error"] = f"[{category}] {type(error).__name__}: {error}"
+    result["notes"] = f"Sample failed: {category}. See logs for traceback."
+    return result
+
+
 def model_evaluation(
     row,
     preprompt,
@@ -679,9 +697,8 @@ def model_evaluation(
             logger.info(f"Running true-MAS evaluation for sample {i} for model {model_name}")
             mas_logger.info("Running true-MAS: task %d/%d, sample %d/%d",index + 1, len(df), i + 1, NUM_SAMPLES_PER_TASK)
             plain_task_prompt = row["Prompt"]
-            aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
-
             try:
+                aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
                 result = run_true_mas(
                     model=effgen_model,
                     task_prompt=plain_task_prompt,
@@ -695,16 +712,20 @@ def model_evaluation(
                 x = result["evaluation_result"]
 
             except ModelTimeoutError as e:
-                timeout_stats["failed_tasks"] += 1
-
-                mas_logger.error(
-                    "Task %d failed due to model timeout: %s",
-                    index + 1,
-                    e,
-                )
-                # Use this format for now so that the result written to csv is for sure consistent.
                 text = ""
-                x = empty_code_error()
+                x = record_failure("timeout", e, index, i)
+            except ModelOutputError as e:
+                text = ""
+                x = record_failure("output_limit", e, index, i)
+            except ValidationError as e:
+                text = ""
+                x = record_failure("validation", e, index, i)
+            except ValueError as e:
+                text = ""
+                x = record_failure("value_error", e, index, i)
+            except Exception as e:
+                text = ""
+                x = record_failure("unexpected", e, index, i)
 
             logger.info(f"Model raw output: {text}")
             df.at[index, "LLM Output #" + str(i)] = text

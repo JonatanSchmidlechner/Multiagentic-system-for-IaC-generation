@@ -29,7 +29,7 @@ def retrieve_provider_schemas_object(
     planner_plan,
     provider_schemas: dict
 ):
-    MAX_CANDIDATES = 2
+    MAX_CANDIDATES = 1
     schemas_object = {}
 
     for resource in planner_plan.resources:

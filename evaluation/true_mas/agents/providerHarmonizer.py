@@ -13,16 +13,16 @@ def provider_harmonizer(model, planner_plan, provider_schemas_object):
     schemas_text = ""
 
     for resource, candidates in provider_schemas_object.items():
-        schemas_text += f"\n<resource name=\"{resource}\">\n"
+      schemas_text += f"\n<resource name=\"{resource}\">\n"
 
-    for resource_type, schema in candidates.items():
-        schemas_text += f"\nCandidate: {resource_type}\n"
-        schemas_text += json.dumps(
-            schema
-        )
-        schemas_text += "\n"
+      for resource_type, schema in candidates.items():
+            schemas_text += f"\nCandidate: {resource_type}\n"
+            schemas_text += json.dumps(
+                schema
+            )
+            schemas_text += "\n"
 
-    schemas_text += "</resource>\n"
+      schemas_text += "</resource>\n"
 
     system_prompt = f"""
 You are the Provider Harmonizer in a multi-agent system that generates Terraform infrastructure.
