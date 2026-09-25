@@ -142,6 +142,32 @@ def create_new_dirs_for_metric(new_base_difficulty_dir, base_dataset_files):
         # print(new_dir_path)
         os.makedirs(new_dir_path, exist_ok=True)
 
+RESOURCE_METRICS = (
+    "prompt_tokens", "completion_tokens", "total_tokens", "attempts", "retries",
+    "request_failures", "timeouts", "output_limit_hits", "duration_seconds",
+    "peak_vram_mib", "energy_wh", "estimated_co2e_g",
+)
+
+
+def aggregate_resource_metrics(df):
+    """Include every task and sample; missing/invalid cells invalidate only their metric."""
+    tasks = df[df["Prompt"].notna()]
+    samples = sorted({int(c.rsplit("#", 1)[1]) for c in df
+                      if re.fullmatch(r"LLM (?:Correct\?|Plannable\?) #\d+", c)})
+    result = {}
+    for metric in RESOURCE_METRICS:
+        values = []
+        for _, row in tasks.iterrows():
+            for sample in samples:
+                value = pd.to_numeric(row.get(f"{metric} #{sample}"), errors="coerce")
+                values.append(value)
+        if not values or any(pd.isna(v) or not math.isfinite(v) or v < 0 for v in values):
+            result[metric] = None
+        else:
+            result[metric] = float(max(values) if metric == "peak_vram_mib" else sum(values))
+    return result
+
+
 def metric_calculation_loop(composition_dict, dataset_dir, output_composition_dict_filepath, pass_k_parameters=None):
 
     """ 
@@ -163,6 +189,7 @@ def metric_calculation_loop(composition_dict, dataset_dir, output_composition_di
 
     for model, model_dict in composition_dict.items():
             for strat, student_dict in model_dict.items():
+                output_composition_dict[model][strat]["resource_metrics"] = {}
                 num_success_both = 0 # pass iac_eval pipeline correctly
                 num_rows = 0
                 num_plan_success = 0
@@ -224,6 +251,8 @@ def metric_calculation_loop(composition_dict, dataset_dir, output_composition_di
                     for file1 in dataset_list:
                         # Go through each row
                         df = pd.read_csv(file1)
+                        dataset_key = str(Path(student) / Path(file1).name)
+                        output_composition_dict[model][strat]["resource_metrics"][dataset_key] = aggregate_resource_metrics(df)
                         print(f"Begin calc metrics for dataset {file1}")
 
                         # iterate through each row

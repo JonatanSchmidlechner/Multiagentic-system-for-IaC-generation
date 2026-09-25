@@ -15,6 +15,7 @@ import re
 import time
 import logging
 import models
+import run_metrics
 import prompt_templates
 import data
 import math
@@ -574,11 +575,10 @@ def read_models(
             Retriever,
             uuid_1,
             effgen_model,
-            aws_provider_schemas
+            aws_provider_schemas,
+            checkpoint=eval_filepath,
         )
-        df.to_csv(eval_filepath, index=False, encoding="utf-8")
 
-    df.to_csv(eval_filepath, index=False, encoding="utf-8")
     df.to_csv(final_filepath, index=False, encoding="utf-8")
 
     logger.info(f"Finished evaluation for {model_name}")
@@ -651,7 +651,8 @@ def model_evaluation(
     Retriever,
     uuid_1,
     effgen_model,
-    aws_provider_schemas = None
+    aws_provider_schemas = None,
+    checkpoint=None,
 ):
     """
     Note: Multi-turn implies 2 turns only
@@ -666,10 +667,7 @@ def model_evaluation(
         if math.isnan(row["Prompt"]):
             return
 
-    # True_mas gets the plain prompt and not an enhanced one.
-    if PROMPT_ENHANCEMENT_STRAT != "true-MAS":
-        prompt = prompt_enhancements(prompt, PROMPT_ENHANCEMENT_STRAT, Retriever)
-
+    enhanced_prompt = None
     policy_file = row["Rego intent"]
     num_correct = 0
     logger.info(f"Begin testing model: {model_name}")
@@ -677,168 +675,185 @@ def model_evaluation(
         if pd.notna(row.get(f"LLM Correct? #{i}")) and pd.notna(row.get(f"LLM Plannable? #{i}")):
             continue
 
-        # ============================================================
-        # TRUE_MAS STARTS HERE
-        # ============================================================
-        if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
-            logger.info(f"Running true-MAS evaluation for sample {i} for model {model_name}")
-            mas_logger.info("Running true-MAS: task %d/%d, sample %d/%d",index + 1, len(df), i + 1, NUM_SAMPLES_PER_TASK)
-            plain_task_prompt = row["Prompt"]
+        with run_metrics.measure_sample(df, index, i, checkpoint):
             try:
-                aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
-                result = run_true_mas(
-                    model=effgen_model,
-                    task_prompt=plain_task_prompt,
-                    policy_file=policy_file,
-                    aws_docs_context=aws_docs_context,
-                    evaluator=eval_pipeline,
-                    uuid_1=uuid_1,
-                    aws_provider_schemas=aws_provider_schemas,
-                )
-                text = result["raw_answer"]
-                x = result["evaluation_result"]
+                prompt = row["Prompt"]
+                sample_preprompt = preprompt
+                if PROMPT_ENHANCEMENT_STRAT != "true-MAS":
+                    # Share enhancement within this task invocation; measure it once.
+                    if enhanced_prompt is None:
+                        enhanced_prompt = prompt_enhancements(prompt, PROMPT_ENHANCEMENT_STRAT, Retriever)
+                    prompt = enhanced_prompt
+                # ============================================================
+                # TRUE_MAS STARTS HERE
+                # ============================================================
+                if PROMPT_ENHANCEMENT_STRAT == "true-MAS":
+                    logger.info(f"Running true-MAS evaluation for sample {i} for model {model_name}")
+                    mas_logger.info("Running true-MAS: task %d/%d, sample %d/%d",index + 1, len(df), i + 1, NUM_SAMPLES_PER_TASK)
+                    plain_task_prompt = row["Prompt"]
+                    try:
+                        aws_docs_context = rag_knowledge(Retriever, plain_task_prompt) if Retriever else ""
+                        result = run_true_mas(
+                            model=effgen_model,
+                            task_prompt=plain_task_prompt,
+                            policy_file=policy_file,
+                            aws_docs_context=aws_docs_context,
+                            evaluator=eval_pipeline,
+                            uuid_1=uuid_1,
+                            aws_provider_schemas=aws_provider_schemas,
+                        )
+                        text = result["raw_answer"]
+                        x = result["evaluation_result"]
 
-            except ModelTimeoutError as e:
-                text = ""
-                x = record_failure("timeout", e, index, i)
-            except ModelOutputError as e:
-                text = ""
-                x = record_failure("output_limit", e, index, i)
-            except ValidationError as e:
-                text = ""
-                x = record_failure("validation", e, index, i)
-            except ValueError as e:
-                text = ""
-                x = record_failure("value_error", e, index, i)
-            except Exception as e:
-                text = ""
-                x = record_failure("unexpected", e, index, i)
+                    except ModelTimeoutError as e:
+                        text = ""
+                        x = record_failure("timeout", e, index, i)
+                    except ModelOutputError as e:
+                        text = ""
+                        x = record_failure("output_limit", e, index, i)
+                    except ValidationError as e:
+                        text = ""
+                        x = record_failure("validation", e, index, i)
+                    except ValueError as e:
+                        text = ""
+                        x = record_failure("value_error", e, index, i)
+                    except Exception as e:
+                        text = ""
+                        x = record_failure("unexpected", e, index, i)
 
-            logger.info(f"Model raw output: {text}")
-            df.at[index, "LLM Output #" + str(i)] = text
-            df.at[index, "LLM Plannable? #" + str(i)] = x["terraform_plan_success"]
-            df.at[index, "LLM Correct? #" + str(i)] = x["opa_evaluation_result"]
-            df.at[index, "LLM Plan Phase Error #" + str(i)] = x["terraform_plan_error"]
-            df.at[index, "LLM OPA match phase Error #" + str(i)] = x["opa_evaluation_error"]
-            df.at[index, "LLM Notes #" + str(i)] = x["notes"]
-            logging.info("Plan Result Summary:")
-            for key, value in x.items():
-                logging.info(f"{key}: {value}")
+                    logger.info(f"Model raw output: {text}")
+                    df.at[index, "LLM Output #" + str(i)] = text
+                    df.at[index, "LLM Plannable? #" + str(i)] = x["terraform_plan_success"]
+                    df.at[index, "LLM Correct? #" + str(i)] = x["opa_evaluation_result"]
+                    df.at[index, "LLM Plan Phase Error #" + str(i)] = x["terraform_plan_error"]
+                    df.at[index, "LLM OPA match phase Error #" + str(i)] = x["opa_evaluation_error"]
+                    df.at[index, "LLM Notes #" + str(i)] = x["notes"]
+                    logging.info("Plan Result Summary:")
+                    for key, value in x.items():
+                        logging.info(f"{key}: {value}")
     
-            # After pipeline run:
-            if str(x["opa_evaluation_result"]).strip().lower() == "success":  # fixed case
-                num_correct += 1
+                    # After pipeline run:
+                    if str(x["opa_evaluation_result"]).strip().lower() == "success":  # fixed case
+                        num_correct += 1
 
-            # ============================================================
-            # TRUE_MAS ENDS HERE
-            # ============================================================
-            continue
+                    # ============================================================
+                    # TRUE_MAS ENDS HERE
+                    # ============================================================
+                    continue
             
     
-        is_empty_code = False
-        multi_turn_count = 1
-        while True:
-            logger.info(f"Sample {i} for model {model_name}")
-            logger.info(f"Preprompt: {preprompt}")
-            logger.info(f"Prompt: {prompt}")
-            if model_name == "gpt4":
-                text = models.GPT4(preprompt, prompt, gpt_client)
-            elif model_name == "gpt3.5":
-                text = models.GPT3_5(preprompt, prompt, gpt_client)
-            elif model_name == "gpt5":
-                text = models.GPT5(preprompt, prompt, gpt_client)
-            elif model_name == "gemini-1.0-pro":
-                text = models.gemini(preprompt, prompt)
-            elif model_name == "gemini-2.5-pro":
-                text = models.gemini_2_5(preprompt, prompt)
-            elif model_name == "gemini-2.0-flash":
-                text = models.gemini_2_flash(preprompt, prompt)
-            elif model_name == "codellama-13b":
-                text = models.Codellama13b(preprompt, prompt)
-            elif model_name == "codellama-7b":
-                text = models.Codellama7b(preprompt, prompt)
-            elif model_name == "codellama-34b":
-                text = models.Codellama34b(preprompt, prompt)
-            elif model_name == "Magicoder_S_CL_7B":
-                text = models.Magicoder_S_CL_7B(preprompt, prompt)
-            elif model_name == "Wizardcoder33b":
-                text = models.Wizardcoder33b(preprompt, prompt)
-            elif model_name == "Wizardcoder34b":
-                text = models.Wizardcoder34b(preprompt, prompt)
-            else:
-                text = models.local_model(preprompt, prompt, model_name, BASE_URL, API_KEY)
+                is_empty_code = False
+                multi_turn_count = 1
+                while True:
+                    logger.info(f"Sample {i} for model {model_name}")
+                    logger.info(f"Preprompt: {sample_preprompt}")
+                    logger.info(f"Prompt: {prompt}")
+                    if model_name == "gpt4":
+                        text = models.GPT4(sample_preprompt, prompt, gpt_client)
+                    elif model_name == "gpt3.5":
+                        text = models.GPT3_5(sample_preprompt, prompt, gpt_client)
+                    elif model_name == "gpt5":
+                        text = models.GPT5(sample_preprompt, prompt, gpt_client)
+                    elif model_name == "gemini-1.0-pro":
+                        text = models.gemini(sample_preprompt, prompt)
+                    elif model_name == "gemini-2.5-pro":
+                        text = models.gemini_2_5(sample_preprompt, prompt)
+                    elif model_name == "gemini-2.0-flash":
+                        text = models.gemini_2_flash(sample_preprompt, prompt)
+                    elif model_name == "codellama-13b":
+                        text = models.Codellama13b(sample_preprompt, prompt)
+                    elif model_name == "codellama-7b":
+                        text = models.Codellama7b(sample_preprompt, prompt)
+                    elif model_name == "codellama-34b":
+                        text = models.Codellama34b(sample_preprompt, prompt)
+                    elif model_name == "Magicoder_S_CL_7B":
+                        text = models.Magicoder_S_CL_7B(sample_preprompt, prompt)
+                    elif model_name == "Wizardcoder33b":
+                        text = models.Wizardcoder33b(sample_preprompt, prompt)
+                    elif model_name == "Wizardcoder34b":
+                        text = models.Wizardcoder34b(sample_preprompt, prompt)
+                    else:
+                        text = models.local_model(sample_preprompt, prompt, model_name, BASE_URL, API_KEY)
 
-            answer, code = separate_answer_and_code(text, DELIMITERS)
-            if code == "":
-                logger.error("Error: Answer contains no code, skipping eval_pipeline.")
-                is_empty_code = True
-            logger.info("Answer is: {}".format(answer))
-            logger.info("Code is: {}".format(code))
+                    answer, code = separate_answer_and_code(text, DELIMITERS)
+                    if code == "":
+                        logger.error("Error: Answer contains no code, skipping eval_pipeline.")
+                        is_empty_code = True
+                    logger.info("Answer is: {}".format(answer))
+                    logger.info("Code is: {}".format(code))
 
-            logger.info(f"Model raw output: {text}")
+                    logger.info(f"Model raw output: {text}")
 
 
-            df.at[index, "LLM Output #" + str(i)] = text
-            if is_empty_code:
-                x = empty_code_error()
-            else:
-                x = eval_pipeline(code, policy_file, prompt, uuid_1)
-            df.at[index, "LLM Plannable? #" + str(i)] = x["terraform_plan_success"]
-            df.at[index, "LLM Correct? #" + str(i)] = x["opa_evaluation_result"]
-            df.at[index, "LLM Plan Phase Error #" + str(i)] = x["terraform_plan_error"]
-            df.at[index, "LLM OPA match phase Error #" + str(i)] = x["opa_evaluation_error"]
-            df.at[index, "LLM Notes #" + str(i)] = x["notes"]
-            logging.info("Plan Result Summary:")
-            for key, value in x.items():
-                logging.info(f"{key}: {value}")
+                    df.at[index, "LLM Output #" + str(i)] = text
+                    if is_empty_code:
+                        x = empty_code_error()
+                    else:
+                        x = eval_pipeline(code, policy_file, prompt, uuid_1)
+                    df.at[index, "LLM Plannable? #" + str(i)] = x["terraform_plan_success"]
+                    df.at[index, "LLM Correct? #" + str(i)] = x["opa_evaluation_result"]
+                    df.at[index, "LLM Plan Phase Error #" + str(i)] = x["terraform_plan_error"]
+                    df.at[index, "LLM OPA match phase Error #" + str(i)] = x["opa_evaluation_error"]
+                    df.at[index, "LLM Notes #" + str(i)] = x["notes"]
+                    logging.info("Plan Result Summary:")
+                    for key, value in x.items():
+                        logging.info(f"{key}: {value}")
 
-            # After pipeline run:
-            if str(x["opa_evaluation_result"]).strip().lower() == "success":  # fixed case
-                num_correct += 1
-                break
-            elif PROMPT_ENHANCEMENT_STRAT == "multi-turn":
-                if multi_turn_count == 2:  # only do 2 turns
-                    break
-                multi_turn_count += 1
-                if code == "":
-                    continue
-                preprompt = prompt_templates.multi_turn_system_prompt()
-                if not x["terraform_plan_success"]:
-                    prompt = prompt_templates.multi_turn_plan_error_prompt(
-                        row["Prompt"], code, x["terraform_plan_error"]
-                    )
-                elif x["opa_evaluation_result"] == "Failure":
-                    prompt = prompt_templates.multi_turn_rego_error_prompt(
-                        row["Prompt"], code, policy_file, x["opa_evaluation_error"]
-                    )
-                continue
-            elif PROMPT_ENHANCEMENT_STRAT == "multi-agent":
-                # Validator-driven repair loop (max 4 attempts)
-                if multi_turn_count == 4:
-                    break
-                multi_turn_count += 1
-                if code == "":
-                    repair_user_prompt = f"""Your previous output contained no Terraform code. Reattempt.
-Original intent:
-{row["Prompt"]}
-Ensure the first fenced block is valid Terraform HCL."""
-                else:
-                    if not x["terraform_plan_success"]:
-                        repair_user_prompt = prompt_templates.multi_turn_plan_error_prompt(
-                            row["Prompt"], code, x["terraform_plan_error"]
-                        )
-                    elif x["opa_evaluation_result"] == "Failure":
-                        repair_user_prompt = prompt_templates.multi_turn_rego_error_prompt(
-                            row["Prompt"], code, policy_file, x["opa_evaluation_error"]
-                        )
+                    # After pipeline run:
+                    if str(x["opa_evaluation_result"]).strip().lower() == "success":  # fixed case
+                        num_correct += 1
+                        break
+                    elif PROMPT_ENHANCEMENT_STRAT == "multi-turn":
+                        if multi_turn_count == 2:  # only do 2 turns
+                            break
+                        multi_turn_count += 1
+                        if code == "":
+                            continue
+                        sample_preprompt = prompt_templates.multi_turn_system_prompt()
+                        if not x["terraform_plan_success"]:
+                            prompt = prompt_templates.multi_turn_plan_error_prompt(
+                                row["Prompt"], code, x["terraform_plan_error"]
+                            )
+                        elif x["opa_evaluation_result"] == "Failure":
+                            prompt = prompt_templates.multi_turn_rego_error_prompt(
+                                row["Prompt"], code, policy_file, x["opa_evaluation_error"]
+                            )
+                        continue
+                    elif PROMPT_ENHANCEMENT_STRAT == "multi-agent":
+                        # Validator-driven repair loop (max 4 attempts)
+                        if multi_turn_count == 4:
+                            break
+                        multi_turn_count += 1
+                        if code == "":
+                            repair_user_prompt = f"""Your previous output contained no Terraform code. Reattempt.
+        Original intent:
+        {row["Prompt"]}
+        Ensure the first fenced block is valid Terraform HCL."""
+                        else:
+                            if not x["terraform_plan_success"]:
+                                repair_user_prompt = prompt_templates.multi_turn_plan_error_prompt(
+                                    row["Prompt"], code, x["terraform_plan_error"]
+                                )
+                            elif x["opa_evaluation_result"] == "Failure":
+                                repair_user_prompt = prompt_templates.multi_turn_rego_error_prompt(
+                                    row["Prompt"], code, policy_file, x["opa_evaluation_error"]
+                                )
+                            else:
+                                break
+                        knowledge = rag_knowledge(Retriever, row["Prompt"]) if Retriever else ""
+                        prompt = build_multi_agent_prompt(knowledge, repair_user_prompt)
+                        sample_preprompt = prompt_templates.multi_turn_system_prompt()
+                        continue
                     else:
                         break
-                knowledge = rag_knowledge(Retriever, row["Prompt"]) if Retriever else ""
-                prompt = build_multi_agent_prompt(knowledge, repair_user_prompt)
-                preprompt = prompt_templates.multi_turn_system_prompt()
-                continue
-            else:
-                break
+
+            except Exception as error:
+                x = record_failure("unexpected", error, index, i)
+                df.at[index, f"LLM Output #{i}"] = ""
+                df.at[index, f"LLM Plannable? #{i}"] = False
+                df.at[index, f"LLM Correct? #{i}"] = "Failure"
+                df.at[index, f"LLM Plan Phase Error #{i}"] = x["terraform_plan_error"]
+                df.at[index, f"LLM Notes #{i}"] = x["notes"]
 
 
 # used to modify main.tf
@@ -1134,7 +1149,7 @@ def setup_gpt_client():
 
     api_key = os.environ["OPENAI_API_KEY"]
 
-    gpt_client= OpenAI(api_key=api_key)
+    gpt_client= OpenAI(api_key=api_key, max_retries=0)
 
 
 def setup_magicoder_params():

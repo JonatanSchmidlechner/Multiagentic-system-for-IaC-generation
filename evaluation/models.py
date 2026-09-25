@@ -1,4 +1,5 @@
 import replicate
+import run_metrics
 import google.generativeai as genai
 import os
 import requests
@@ -356,6 +357,7 @@ def local_model(preprompt, prompt, model_name, base_url, api_key):
     """Generate through the supplied OpenAI-compatible model server."""
     with OpenAI(base_url=base_url, api_key=api_key, timeout=480, max_retries=0) as client:
         for attempt in range(2):
+            run_metrics.attempt(retry=attempt > 0)
             try:
                 response = client.chat.completions.create(
                     model=model_name,
@@ -366,8 +368,15 @@ def local_model(preprompt, prompt, model_name, base_url, api_key):
                     max_tokens=2000,
                     temperature=0,
                 )
+                usage = response.usage
+                run_metrics.response(
+                    usage.prompt_tokens if usage else None,
+                    usage.completion_tokens if usage else None,
+                    response.choices[0].finish_reason,
+                )
                 return response.choices[0].message.content or ""
             except Exception as e:
+                run_metrics.failure(e)
                 if attempt == 0 and (isinstance(e, RateLimitError) or "Rate limit is exceeded" in str(e)):
                     time.sleep(30)
                     continue

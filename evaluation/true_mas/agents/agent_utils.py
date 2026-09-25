@@ -1,4 +1,5 @@
 import time
+import run_metrics
 
 from effgen import GenerationConfig, load_model
 
@@ -72,6 +73,7 @@ def _generate_with_retries(
     config = GenerationConfig(temperature=TEMPERATURE, max_tokens=max_tokens)
 
     for attempt in range(MAX_TIMEOUT_RETRIES + 1):
+        run_metrics.attempt(retry=attempt > 0)
         try:
             if response_format is None:
                 result = model.generate(
@@ -88,6 +90,7 @@ def _generate_with_retries(
                     extra_body={"max_tokens": max_tokens},
                 )
         except Exception as error:
+            run_metrics.failure(error)
             if not is_timeout_error(error):
                 raise
 
@@ -105,6 +108,8 @@ def _generate_with_retries(
             time.sleep(RETRY_DELAY_SECONDS)
             continue
 
+        usage = result.metadata or {}
+        run_metrics.response(usage.get("prompt_tokens"), usage.get("completion_tokens"), result.finish_reason)
         if result.finish_reason == "length":
             raise ModelOutputError(
                 f"{agent_name} reached its output limit of {max_tokens} tokens"
