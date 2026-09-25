@@ -1,10 +1,11 @@
 # Assumption: single file for each evaluated dataset. (e.g., no -pass5 and -pass1 in the same folder.) 
 import csv
+import argparse
+from datetime import datetime
 import pandas as pd
 import logging
 import os
 from pathlib import Path
-from openai import AzureOpenAI
 import pandas as pd
 import json
 import math
@@ -15,7 +16,7 @@ import re
 import sys
 import numpy as np  # added: used by estimator
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-import eval
+from output_utils import separate_answer_and_code
 import metrics
 
 DELIMITERS = ["```hcl", "```json", "```HCL", "```Terraform", "```terraform", "```"] # ``` needs to be in the end, as it is a final "else" case
@@ -49,7 +50,7 @@ class CustomFormatter(logging.Formatter):
 logger = logging.getLogger("iac-eval-repair")
 logger.setLevel(logging.DEBUG)
 #Setup File handler: https://stackoverflow.com/a/24507130/13336187 
-file_handler = logging.FileHandler(LOG_FILE)
+file_handler = logging.FileHandler(Path(__file__).resolve().parents[2] / LOG_FILE)
 file_handler.setFormatter(CustomFormatter())
 file_handler.setLevel(logging.DEBUG)
 #Setup Stream Handler (i.e. console)
@@ -267,7 +268,7 @@ def metric_calculation_loop(composition_dict, dataset_dir, output_composition_di
                                 #         x=1
                                 reference = row["Reference output"]
                                 try:
-                                    answer, candidate = eval.separate_answer_and_code(row["LLM Output #0"], DELIMITERS)
+                                    answer, candidate = separate_answer_and_code(row["LLM Output #0"], DELIMITERS)
                                 except Exception as e:
                                     s = str(e)
                                     print(s)
@@ -371,6 +372,10 @@ def extract_dataset_row(eval_row, eval_index, eval_df, dataset_dir, eval_filenam
     Example eval_filename: '/home/ubuntu/autoiac-tasks/evaluation/misc/ablation/../../../results-for-iac-eval (backup)/multi-turn/codellama-34b/george/evaluation-dataset-for-plain-dataset-george-existing-multi-turn.csv'
     """
 
+    # Use the metadata saved with this result, including the sampled row order.
+    if "Difficulty" in eval_row and pd.notna(eval_row["Difficulty"]):
+        return eval_df, eval_row
+
     # Extract corresponding "data" dataset file name:
     file_stem = Path(eval_filename).stem # https://stackoverflow.com/questions/678236/how-do-i-get-the-filename-without-the-extension-from-a-path-in-python
     file_stem = file_stem.split("evaluation-dataset-for-")[1]
@@ -463,13 +468,40 @@ def generate_terraform_plan_json(prompt, terraform_dir="./misc/ablation/terrafor
         return "Plan timed-out. No output", "Plan timed-out. No error", False
 
 
+def experiment_composition(results_dir):
+    """Group only this experiment's detailed files in the original input format."""
+    composition = {}
+    strategies = ["multi-turn", "RAG", "COT", "FSP", "multi-agent", "true-MAS"]
+    for path in sorted(results_dir.rglob("evaluation-dataset-for-*.csv")):
+        relative = path.relative_to(results_dir)
+        if "llm-judge-evaluation-metric" in relative.parts or len(relative.parts) < 2:
+            continue
+        model = relative.parts[0]
+        dataset = str(relative.parent.relative_to(model))
+        stem = path.stem.removesuffix("-sampled")
+        strategy = next((s for s in strategies if stem.endswith("-" + s)), "Standard")
+        tasks = pd.read_csv(path).dropna(subset=["Prompt"])
+        columns = [c for c in tasks if c.startswith(("LLM Correct? #", "LLM Plannable? #"))]
+        if tasks.empty or "LLM Correct? #0" not in columns or "LLM Plannable? #0" not in columns or tasks[columns].isna().any().any():
+            raise ValueError(f"Incomplete evaluation: {path}")
+        composition.setdefault(model, {}).setdefault(strategy, {}).setdefault(dataset, []).append(str(path))
+    if not composition:
+        raise ValueError(f"No detailed results in {results_dir}")
+    return composition
+
+
 def main():
-    # Find dataset files: 
+    parser = argparse.ArgumentParser(description="Calculate the existing IaC-Eval JSON summary.")
+    parser.add_argument("--experiment-id", help="Read only results/experiments/ID")
+    args = parser.parse_args()
+    if args.experiment_id and not re.fullmatch(r"[A-Za-z0-9_-]+", args.experiment_id):
+        parser.error("Experiment ID must contain only letters, digits, underscores and hyphens")
+    # Find dataset files:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     eval_dataset_dir = os.path.join(script_dir, "../..", "results")
     dataset_dir = os.path.join(script_dir, "../../../data")
     # print()
-    excluded_dirs = ["llm-judge-evaluation-metric", "pass"] # skip filenames containing "pass". will merge them into a regular file once done with eval..
+    excluded_dirs = ["experiments", "llm-judge-evaluation-metric", "pass"] # skip filenames containing "pass". will merge them into a regular file once done with eval..
     # Build composition dict programmatically with multi-agent included
     models = [
         #"gpt4",
@@ -486,16 +518,21 @@ def main():
     strategies = ["COT", "FSP", "multi-turn", "RAG", "multi-agent", "Standard", "true-MAS"]
     composition_dict = {m: {s: {"complete": []} for s in strategies} for m in models}
 
-    eval_dataset_files, composition_dict = list_all_subdirectories(composition_dict, eval_dataset_dir, excluded_dirs)
-    eval_dataset_files = [f for f in eval_dataset_files if "test" not in f]
-    # print(eval_dataset_files)
+    if args.experiment_id:
+        eval_dataset_dir = (Path(eval_dataset_dir) / "experiments" / args.experiment_id).resolve()
+        composition_dict = experiment_composition(eval_dataset_dir)
+        # Every analysis gets a new filename, even when analyzing the same experiment again.
+        suffix = f"{args.experiment_id}_{datetime.now():%Y%m%d_%H%M%S_%f}"
+        input_path = eval_dataset_dir / f"input_composition_dict_{suffix}.json"
+        output_composition_dict_filepath = eval_dataset_dir / f"output_composition_dict_{suffix}.json"
+    else:
+        _, composition_dict = list_all_subdirectories(composition_dict, eval_dataset_dir, excluded_dirs)
+        input_path = Path(script_dir) / "input_composition_dict.json"
+        output_composition_dict_filepath = Path(script_dir) / "output_composition_dict.json"
 
-    with open(os.path.join(script_dir, 'input_composition_dict.json'), 'w') as fp:
+    with open(input_path, "w") as fp:
         json.dump(composition_dict, fp)
-
     print(composition_dict)
-
-    output_composition_dict_filepath = os.path.join(script_dir, 'output_composition_dict.json')
 
     # Calculate regular metrics
     output_composition_dict = metric_calculation_loop(composition_dict, dataset_dir, output_composition_dict_filepath)
@@ -503,6 +540,7 @@ def main():
 
     with open(output_composition_dict_filepath, 'w') as fp:
         json.dump(output_composition_dict, fp)
+    print(f"Summary saved to {output_composition_dict_filepath}")
 
 if __name__ == "__main__":
     main()

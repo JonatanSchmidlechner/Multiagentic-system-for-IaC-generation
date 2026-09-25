@@ -80,7 +80,7 @@ def extract_rating_from_answer(text):
 # Take our existing dataset, iterate through each row, add a new column with the LLM generated response, and a new column for the extracted verdict, and save the new dataset to a new file with a filename that is prefixed with the llm model-name. 
 def list_all_subdirectories(data_dir):
     onlyfiles = [os.path.join(dirpath,f) for (dirpath, dirnames, filenames) in os.walk(data_dir) for f in filenames] 
-    onlyfilescsv = [f for f in onlyfiles if f.endswith(".csv")]
+    onlyfilescsv = [f for f in onlyfiles if f.endswith(".csv") and "experiments" not in Path(os.path.relpath(f, data_dir)).parts]
     return onlyfilescsv
 
 def create_new_dirs_for_metric(base_eval_files, new_base_metric_dir="llm-judge-evaluation-metric"):

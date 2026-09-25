@@ -320,9 +320,7 @@ def list_all_subdirectories_and_eval(
     data_dir, base_eval_dir, final_eval_dir, PROMPT_ENHANCEMENT_STRAT, sampled
 ):
     for path, _, _ in os.walk(data_dir):
-        subdir = path.removeprefix(
-            data_dir + "/"
-        )  # FIX?: temp fix for now, the way to go is prob using pathlib
+        subdir = os.path.relpath(path, data_dir)
         create_evaluation_directories(subdir, base_eval_dir=base_eval_dir, final_eval_dir=final_eval_dir)
         file_dir = os.listdir(path)
         for file in file_dir:
@@ -377,7 +375,7 @@ def list_all_subdirectories_and_eval(
 def create_evaluation_directories(subdir, base_eval_dir="evaluation/tmp", final_eval_dir="results"):
     for model in EVAL_MODELS:
         # construct the new directory path
-        safe_model_name = model.replace(":", "_")
+        safe_model_name = re.sub(r'[^\w.\-]', "_", model)
         eval_dir_path = os.path.join(base_eval_dir, safe_model_name, subdir)
         final_eval_dir_path = os.path.join(final_eval_dir, safe_model_name, subdir)
         # create the directory if it does not exist
@@ -420,39 +418,19 @@ def fix_duplicate_columns(dest_file_path):
 def determine_eval_samples(dest_file_path):
     """
     Determine the number of samples currently present in a given evaluated dataset file.
-    Also determines columns to remove (i.e., which are empty, because a previous evaluation run was not complete, which can only occur if copy_csv was successful but read_models was interrupted)
+    Partial samples are retained and resumed task by task.
     Note: this is a variant of the same function used in llm-judge-eval.py
     """
 
-    drop_cols = []
-
-    df = pd.read_csv(dest_file_path, header=None)
-    new_header = df.iloc[0]
-    df = df[1:]
-    df.columns = new_header
-    df.reset_index(drop=True, inplace=True)
-
+    df = pd.read_csv(dest_file_path)
+    tasks = df[df["Prompt"].notna()]
     num_samples = 0
-    for col in df.columns:
-        if "LLM Correct?" in col:
-            if not pd.isnull(
-                df[col].iloc[0]
-            ):  # this means that the column is not empty (i.e., prev evaluation passed through successfully)
-                num_samples += 1
-            else:
-                cols_to_drop = [
-                    "LLM Output #",
-                    "LLM Plannable? #",
-                    "LLM Correct? #",
-                    "LLM Plan Phase Error #",
-                    "LLM OPA match phase Error #",
-                    "LLM Notes #",
-                ]  # drop all columns for this sample
-                drop_cols.extend(
-                    [col_base + str(col.split("#")[1]) for col_base in cols_to_drop]
-                )
-
-    return num_samples, drop_cols
+    while not tasks.empty and all(
+        f"{prefix}{num_samples}" in tasks and tasks[f"{prefix}{num_samples}"].notna().all()
+        for prefix in ("LLM Correct? #", "LLM Plannable? #")
+    ):
+        num_samples += 1
+    return num_samples, []
 
 
 # function to copy CSV to the new evaluation directory and rename it
@@ -480,7 +458,7 @@ def copy_csv_to_evaluation(
     )
     if sampled:
         eval_filename = eval_filename.replace(".csv", "-sampled.csv")
-    safe_model_name = model.replace(":", "_") # colon wont work in Windows file names, so replace with underscore
+    safe_model_name = re.sub(r'[^\w.\-]', "_", model) # colon wont work in Windows file names, so replace with underscore
     
     dest_file_path = os.path.join(base_eval_dir, safe_model_name, subdir, eval_filename)
 
@@ -506,7 +484,8 @@ def copy_csv_to_evaluation(
             logger.info(
                 f"Skipping evaluation for {dest_file_path} as file already exists, and it has enough samples."
             )
-            return dest_file_path, None, True, num_eval_samples
+            shutil.copyfile(dest_file_path, final_file_path)
+            return dest_file_path, final_file_path, True, num_eval_samples
 
         logger.info(
             f"Evaluation file {dest_file_path} already exists, but has not enough samples (required: {NUM_SAMPLES_PER_TASK}, existing: {num_eval_samples}), will continue evaluation."
@@ -536,7 +515,8 @@ def copy_csv_to_evaluation(
             "LLM OPA match phase Error #",
             "LLM Notes #",
         ]:
-            df[col_base + str(i)] = ""
+            if col_base + str(i) not in df:
+                df[col_base + str(i)] = ""
 
     df.to_csv(dest_file_path, index=False, encoding="utf-8")
 
@@ -563,8 +543,8 @@ def read_models(
 
     # Read from evaluation dataset file:
     df = pd.read_csv(eval_filepath, header=0)
-    if sampled:
-        tasks_per_difficulty = 10
+    if sampled and not df.filter(like="LLM Correct? #").notna().any().any():
+        tasks_per_difficulty = 2
         seed = 42
         df = (
             df.groupby("Difficulty", group_keys=False)
@@ -581,6 +561,8 @@ def read_models(
     for index, row in df.iterrows():
         # iterate every row
         # find specific column
+        if PROMPT_ENHANCEMENT_STRAT != "true-MAX":
+            logger.info("Running task %d/%d", index + 1, len(df))
         model_evaluation(
             row,
             preprompt,
@@ -674,6 +656,9 @@ def model_evaluation(
     """
     Note: Multi-turn implies 2 turns only
     """
+    if all(pd.notna(row.get(f"LLM Correct? #{i}")) and pd.notna(row.get(f"LLM Plannable? #{i}"))
+           for i in range(NUM_SAMPLES_PER_TASK)):
+        return
     prompt = row["Prompt"]
 
     # Skip empty rows
@@ -689,6 +674,8 @@ def model_evaluation(
     num_correct = 0
     logger.info(f"Begin testing model: {model_name}")
     for i in range(NUM_EXISTING_SAMPLES, NUM_SAMPLES_PER_TASK):
+        if pd.notna(row.get(f"LLM Correct? #{i}")) and pd.notna(row.get(f"LLM Plannable? #{i}")):
+            continue
 
         # ============================================================
         # TRUE_MAS STARTS HERE
@@ -778,8 +765,8 @@ def model_evaluation(
                 text = models.Wizardcoder33b(preprompt, prompt)
             elif model_name == "Wizardcoder34b":
                 text = models.Wizardcoder34b(preprompt, prompt)
-            elif model_name == "llama3.1:8b":
-                text = models.Llama3_1_8b(preprompt, prompt) 
+            else:
+                text = models.local_model(preprompt, prompt, model_name, BASE_URL, API_KEY)
 
             answer, code = separate_answer_and_code(text, DELIMITERS)
             if code == "":
@@ -1178,7 +1165,7 @@ def setup_magicoder_params():
     type=str,
     help=f"List of evaluation models. Available models: {' '.join(EVAL_MODELS)}",
     callback=read_eval_models,
-    default=EVAL_MODELS,
+    default=",".join(EVAL_MODELS),
 )
 @click.option(
     "--config",
@@ -1200,7 +1187,7 @@ def setup_magicoder_params():
     "--enhance-strat",
     "-e",
     "enhance_strat",
-    type=click.Choice(PROMPT_ENHANCEMENT_STRATS),
+    type=click.Choice(["", *PROMPT_ENHANCEMENT_STRATS]),
     help=f"Prompt enhancement strategy. Available strategies: {' '.join(PROMPT_ENHANCEMENT_STRATS)}",
     default="",
 )
@@ -1209,15 +1196,18 @@ def setup_magicoder_params():
     is_flag=True,
     help="Use a balanced sampled subset of the dataset.",
 )
-# @click.argument("enhance_strat", nargs=1, type=str, default="")
+@click.option("--experiment-id", help="Write results and checkpoints under this experiment ID.")
 def main(
-    samples: int, models: List[str], config: Path, log_file: Path, enhance_strat: str, quick_test: bool, sampled: bool
+    samples: int, models: List[str], config: Path, log_file: Path, enhance_strat: str, quick_test: bool, sampled: bool, experiment_id: str = None
 ):
     """
     Evaluate models.
     Available enhancement strategy: "RAG", "COT", "FSP", "multi-turn", or "multi-agent".
     Config file takes precedence over command line options.
     """  # FIX
+
+    if experiment_id and not re.fullmatch(r"[A-Za-z0-9_-]+", experiment_id):
+        raise click.BadParameter("Use only letters, digits, underscores and hyphens", param_hint="--experiment-id")
 
     if config is not None:
         samples, models = read_config_file(config)
@@ -1265,6 +1255,9 @@ def main(
         data_dir, "..", "evaluation/tmp"
     )  # should be the same as script_dir
     final_eval_dir = os.path.join(data_dir, "..", "evaluation/results")
+    if experiment_id:
+        base_eval_dir = os.path.join(base_eval_dir, "experiments", experiment_id)
+        final_eval_dir = os.path.join(final_eval_dir, "experiments", experiment_id)
     # Create evaluation directories for each data directory
     # and perform model evaluation:
     list_all_subdirectories_and_eval(

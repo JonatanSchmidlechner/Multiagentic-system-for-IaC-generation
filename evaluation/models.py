@@ -7,11 +7,8 @@ import json
 import subprocess
 import time
 from ollama import chat
-from ollama import Client
+from openai import OpenAI, RateLimitError
 
-ollama_client = Client(
-  host='http://86.50.169.115:11434',
-)
 
 # GPT evaluation generation
 # set your API key here, need to be hided
@@ -355,48 +352,23 @@ def gemini_2_flash(preprompt, prompt):
 
 # print(Wizardcoder34b("You are TerraformAI, an AI agent that builds and deploys Cloud Infrastructure written in Terraform HCL. Generate a description of the Terraform program you will define, followed by a single Terraform HCL program in response to each of my Instructions. Make sure the configuration is deployable. Create IAM roles as needed. If variables are used, make sure default values are supplied.", "Here is the actual prompt: Create an AWS VPC resource with an Internet Gateway attached to it"))
 
-def Llama3_1_8b(preprompt, prompt):
-    while True:
-        try:
-            response = ollama_client.chat(
-                model="llama3.1:8b",   
-                messages=[
-                    {"role": "system", "content": preprompt},
-                    {"role": "user", "content": prompt},
-                ],
-                options={
-                    "num_predict": 1000,
-                    "temperature": 0.95,
-                },
-            )
-            return response.message.content
-        except Exception as e:
-            s = str(e)
-            if "Rate limit is exceeded" in s:
-                time.sleep(30)
-                continue
-            else:
-                return ""
-
-def qwen2_5_coder(preprompt, prompt):
-    while True:
-        try:
-            response = chat(
-                model="qwen2.5-coder",
-                messages=[
-                    {"role": "system", "content": preprompt},
-                    {"role": "user", "content": prompt},
-                ],
-                options={
-                    "num_predict": 1000,
-                    "temperature": 0.95,
-                },
-            )
-            return response.message.content
-        except Exception as e:
-            s = str(e)
-            if "Rate limit is exceeded" in s:
-                time.sleep(30)
-                continue
-            else:
+def local_model(preprompt, prompt, model_name, base_url, api_key):
+    """Generate through the supplied OpenAI-compatible model server."""
+    with OpenAI(base_url=base_url, api_key=api_key, timeout=480, max_retries=0) as client:
+        for attempt in range(2):
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": preprompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=2000,
+                    temperature=0,
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                if attempt == 0 and (isinstance(e, RateLimitError) or "Rate limit is exceeded" in str(e)):
+                    time.sleep(30)
+                    continue
                 return ""

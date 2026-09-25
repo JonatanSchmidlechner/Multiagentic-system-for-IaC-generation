@@ -437,7 +437,7 @@ def main():
     eval_dataset_dir = os.path.join(script_dir, "../..", "results")
     dataset_dir = os.path.join(script_dir, "../complete-dataset-measurement/complete-dataset")
     # print()
-    excluded_dirs = ["pass"] # skip filenames containing "pass". will merge them into a regular file once done with eval..
+    excluded_dirs = ["experiments", "pass"] # skip filenames containing "pass". will merge them into a regular file once done with eval..
     composition_dict = {
         "gpt4": {
             "COT": {
