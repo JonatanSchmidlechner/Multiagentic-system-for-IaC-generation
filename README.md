@@ -25,7 +25,7 @@ Note: before `conda activate` you might need to do `conda init SHELL_NAME` on yo
 6. Preconfigure the retriever database: refer to instructions in `retriever/README.md`.
 7. Create .env file to repository root and add the API_KEY and BASE_URL according to the .env_example
 
-# TRUE-MAS USAGE GUIDE
+## TRUE-MAS USAGE GUIDE
 See more instructions in `evaluation/README.md` for more details about scripts.
 All commands assume you are in the `evaluation` directory, and that you have activated the env:
 
@@ -46,6 +46,24 @@ NOTE: The pipeline can not be run if there are existing evaluation results for t
 python3 misc/ablation/ablation-iac-eval-pipeline.py
    ```
 3. See the TRUE-MAS specific logs in true_mas/true_mas_debug.log.
+
+## Run Experiment with multiple models and methods
+You can use a single command to run a multi-run experiment testing multiple models with each of the specified methods. The ablation script for showing final results is run automatically here after the experiment is finished.
+
+Below is an example command, which uses the whole dataset. Use --sampled for a smaller subset or use --quick-test for a subset of 2 rows for each model + method run.
+```shell
+python3 run_experiment.py \
+  --models 'llama3.1:8b,llama3.2:latest,deepseek-r1:7b,qwen2.5-coder:7b,starcoder2:7b' \
+  --methods 'RAW,RAG,COT,FSP,multi-turn,multi-agent,true-MAS' \
+  --samples 1
+   ```
+
+Each experiment automatically gets an unique based on timestamp. The results are stored in results/<experiment id>. If your experiment gets interrupted, you can continue the experiment by adding the correct id with --experiment-id <id> to the run_experiment command. You can also add new models to the experiment later the same way.
+
+run_experiment.py automatically checks that each specified model can be reached before starting the main benchmark. However, It is still suggested to use quick-test to check that new models work properly. Check that the final results look ok in quick-test.
+
+
+
 ## Installation
 
 1. Install Terraform (also [install AWS CLI and setup credentials](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-build#prerequisites))
