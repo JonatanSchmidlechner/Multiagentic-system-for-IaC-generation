@@ -8,6 +8,7 @@ from threading import Event, Thread
 from codecarbon import OfflineEmissionsTracker
 
 from true_mas import config
+from resource_metrics import RESOURCE_METRICS
 
 if config.MEASURE_VRAM:
     import pynvml
@@ -93,11 +94,7 @@ def monitor_vram():
         thread.join()
 
 
-METRICS = (
-    "prompt_tokens", "completion_tokens", "total_tokens", "attempts", "retries",
-    "request_failures", "timeouts", "output_limit_hits", "duration_seconds",
-    "peak_vram_mib", "energy_wh", "estimated_co2e_g",
-)
+METRICS = RESOURCE_METRICS
 
 
 def reset():
@@ -107,7 +104,7 @@ def reset():
 
 
 def attempt(retry=False):
-    stats['attempts'] += 1
+    stats['model_request_attempts'] += 1
     stats['retries'] += int(retry)
 
 

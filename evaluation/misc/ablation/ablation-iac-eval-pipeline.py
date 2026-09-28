@@ -18,6 +18,7 @@ import numpy as np  # added: used by estimator
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from output_utils import separate_answer_and_code
 import metrics
+from resource_metrics import RESOURCE_METRICS
 
 DELIMITERS = ["```hcl", "```json", "```HCL", "```Terraform", "```terraform", "```"] # ``` needs to be in the end, as it is a final "else" case
 
@@ -141,13 +142,6 @@ def create_new_dirs_for_metric(new_base_difficulty_dir, base_dataset_files):
         new_dir_path = os.path.join(new_base_difficulty_dir, containing_folder)
         # print(new_dir_path)
         os.makedirs(new_dir_path, exist_ok=True)
-
-RESOURCE_METRICS = (
-    "prompt_tokens", "completion_tokens", "total_tokens", "attempts", "retries",
-    "request_failures", "timeouts", "output_limit_hits", "duration_seconds",
-    "peak_vram_mib", "energy_wh", "estimated_co2e_g",
-)
-
 
 def aggregate_resource_metrics(df):
     """Include every task and sample; missing/invalid cells invalidate only their metric."""

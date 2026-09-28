@@ -545,7 +545,7 @@ def read_models(
     # Read from evaluation dataset file:
     df = pd.read_csv(eval_filepath, header=0)
     if sampled and not df.filter(like="LLM Correct? #").notna().any().any():
-        tasks_per_difficulty = 2
+        tasks_per_difficulty = 4
         seed = 42
         df = (
             df.groupby("Difficulty", group_keys=False)
@@ -563,7 +563,7 @@ def read_models(
         # iterate every row
         # find specific column
         if PROMPT_ENHANCEMENT_STRAT != "true-MAX":
-            logger.info("Running task %d/%d", index + 1, len(df))
+            logger.info("Running task %d/%d with %s", index + 1, len(df), PROMPT_ENHANCEMENT_STRAT)
         model_evaluation(
             row,
             preprompt,
@@ -673,6 +673,7 @@ def model_evaluation(
     logger.info(f"Begin testing model: {model_name}")
     for i in range(NUM_EXISTING_SAMPLES, NUM_SAMPLES_PER_TASK):
         if pd.notna(row.get(f"LLM Correct? #{i}")) and pd.notna(row.get(f"LLM Plannable? #{i}")):
+            logger.info(f"Skipping sample {i} for model {model_name}, method {PROMPT_ENHANCEMENT_STRAT} as it already has results.")
             continue
 
         with run_metrics.measure_sample(df, index, i, checkpoint):
@@ -742,9 +743,9 @@ def model_evaluation(
                     continue
             
     
-                is_empty_code = False
                 multi_turn_count = 1
                 while True:
+                    is_empty_code = False
                     logger.info(f"Sample {i} for model {model_name}")
                     logger.info(f"Preprompt: {sample_preprompt}")
                     logger.info(f"Prompt: {prompt}")
