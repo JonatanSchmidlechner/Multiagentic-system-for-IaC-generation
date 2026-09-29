@@ -63,14 +63,14 @@ def run_true_mas(model, task_prompt, policy_file, aws_docs_context, evaluator, u
         if not terraform_success:
             validation_error = validation["terraform_plan_error"]
             mas_logger.info(
-                "Terraform validation failed on repair attempt %d",
-                attempt
+                "Terraform validation failed on attempt %d",
+                attempt + 1
             )
         elif not opa_success:
             validation_error = validation["opa_evaluation_error"]
             mas_logger.info(
-                "OPA validation failed on repair attempt %d",
-                attempt
+                "OPA validation failed on attempt %d",
+                attempt + 1
             )
         else:
             break
