@@ -9,6 +9,7 @@ import subprocess
 import time
 from ollama import chat
 from openai import OpenAI, RateLimitError
+from true_mas.config import TEMPERATURE, TEXT_GENERATION_MAX_TOKENS
 
 
 # GPT evaluation generation
@@ -365,8 +366,8 @@ def local_model(preprompt, prompt, model_name, base_url, api_key):
                         {"role": "system", "content": preprompt},
                         {"role": "user", "content": prompt},
                     ],
-                    max_tokens=2000,
-                    temperature=0,
+                    max_tokens=TEXT_GENERATION_MAX_TOKENS,
+                    temperature=TEMPERATURE,
                 )
                 usage = response.usage
                 run_metrics.response(
