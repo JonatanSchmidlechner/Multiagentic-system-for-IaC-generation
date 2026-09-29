@@ -562,7 +562,7 @@ def read_models(
     for index, row in df.iterrows():
         # iterate every row
         # find specific column
-        logger.info("Running task %d/%d with %s using model %s", index + 1, len(df), PROMPT_ENHANCEMENT_STRAT, model_name)
+        logger.info("Running task %d/%d with config %s using model %s", index + 1, len(df), PROMPT_ENHANCEMENT_STRAT or "Standard", model_name)
         model_evaluation(
             row,
             preprompt,
