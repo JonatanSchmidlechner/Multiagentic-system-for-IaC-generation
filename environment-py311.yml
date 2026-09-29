@@ -115,7 +115,7 @@ dependencies:
       - httpcore==1.0.9
       - httpcore2==2.13.0
       - httplib2==0.32.0
-      - httptools==0.6.1
+      - httptools==0.8.0
       - httpx==0.28.1
       - httpx-sse==0.4.3
       - httpx2==2.13.0

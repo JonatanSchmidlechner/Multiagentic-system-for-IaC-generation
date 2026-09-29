@@ -85,4 +85,4 @@ class Retriever:
         return context
 
 if __name__ == "__main__":
-    retriever = Retriever(stored_index='aws-index', path='terraform-provider-aws/website/docs/r', llm=effgen_model)
+    retriever = Retriever(stored_index='aws-index', path='terraform-provider-aws/website/docs/r')

@@ -562,8 +562,7 @@ def read_models(
     for index, row in df.iterrows():
         # iterate every row
         # find specific column
-        if PROMPT_ENHANCEMENT_STRAT != "true-MAX":
-            logger.info("Running task %d/%d with %s", index + 1, len(df), PROMPT_ENHANCEMENT_STRAT)
+        logger.info("Running task %d/%d with %s using model %s", index + 1, len(df), PROMPT_ENHANCEMENT_STRAT, model_name)
         model_evaluation(
             row,
             preprompt,
