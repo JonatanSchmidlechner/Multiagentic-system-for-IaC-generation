@@ -1,11 +1,36 @@
 
 # Multi-Agent Code-Orchestrated Generation for Reliable Infrastructure-as-Code (IaC‑Eval)
 
-This repository evaluates our multi-agent approach that turns natural language intents into reliable Terraform HCL using IaC‑Eval. IaC-Eval is a comprehensive framework for quantitatively evaluating the capabilities of large language models in cloud IaC code generation. Infrastructure-as-Code (IaC) is an important component of cloud computing, that allows the definition of cloud infrastructure in high-level programs. Our framework targets Terraform specifically for now. We leave integration of other IaC tools as future work. 
+This repository evaluates our multi-agent approach that turns natural language intents into reliable Terraform HCL using IaC‑Eval. IaC-Eval is a comprehensive framework for quantitatively evaluating the capabilities of large language models in cloud IaC code generation. Infrastructure-as-Code (IaC) is an important component of cloud computing, that allows the definition of cloud infrastructure in high-level programs. Our framework targets Terraform specifically for now.
 
 IaC-Eval also provides the first human-curated and challenging Infrastructure-as-Code (IaC) dataset containing 458 questions ranging from simple to difficult across various cloud services (targeting AWS for now), which can be found in our [HuggingFace repository](https://huggingface.co/datasets/autoiac-project/iac-eval).
 
-**We are actively developing and patching the project. However, as of now, IaC-Eval is not production-ready.** 
+## My contribution
+This repository is based on an existing benchmark. My primary contribution was implementing TRUE-MAS configuration for the benchmark. I also made it possible to run multiple configurations using 1 command. Additionally, I changed the benchmark to run the language models locally (or to run in our own cloud servers) instead of in 3rd party cloud providers' servers.
+
+## Architecture
+
+TRUE-MAS generates and validates Terraform configurations from natural language prompts using a four-agent pipeline paired with deterministic verification tools. Instead of generating code in a single pass, the system separates planning, schema checking, code generation, and error repair into distinct steps.
+
+### Agents
+
+* **Planner:** Breaks down the prompt into a structured infrastructure plan, identifying the required AWS resources and dependencies.
+* **Provider Harmonizer:** Maps the planned resources against official AWS provider schemas so invalid arguments or resource types are caught before code generation.
+* **IaC Generator:** Writes the Terraform HCL code from the validated plan, and applies targeted fixes during repair iterations.
+* **Reviewer:** Inspects Terraform and policy error messages when validation fails, diagnoses the issue, and produces a fix plan for the Generator.
+
+### Tools
+
+* **LlamaIndex RAG:** Retrieves relevant chunks from indexed AWS Terraform documentation to give the Planner accurate resource context.
+* **AWS Provider Schema Lookup:** Queries the Terraform AWS provider schema (`v5.75.0`) to supply valid resource attributes and block definitions to the Harmonizer.
+* **Terraform CLI (`plan`):** Validates HCL syntax, provider versions, and resource references, compiling an execution plan (`plan.json`).
+* **Open Policy Agent (OPA):** Evaluates `plan.json` against Rego policies to verify that the generated infrastructure satisfies functional and compliance rules.
+
+### Execution Flow
+
+1. **Plan & Ground:** The **Planner** drafts the resource layout using **LlamaIndex RAG**, and the **Provider Harmonizer** verifies the resources against the **AWS Provider Schema**.
+2. **Generate:** The **IaC Generator** produces the Terraform HCL code.
+3. **Verify & Repair:** **Terraform** and **OPA** validate the code. If either check fails, the **Reviewer** diagnoses the error and sends a fix plan back to the **IaC Generator** (up to 3 repair attempts).
 
 ## TRUE-MAS INSTALLATION AND USAGE GUIDE
 
@@ -15,7 +40,7 @@ Here are the instructions what is needed to run the local models. A lot of the i
 2. Install Terraform
 3. Install Opa. The latest versions don't work. I have version 0.70.0. Add OPA to path.
 4. Install Anaconda
-5. Create the conda environment: (This environment is specifically for true-MAS. True-MAS required a python version upgrade, which caused dependency problems. I think MACOG with local SLMs still work, but I had to remove some dependencies, which may have broken the use of the LLMs.)
+5. Create the conda environment:
 Use the following command in project root:
 ```shell
    conda env create -f environment-py311.yml
@@ -61,49 +86,6 @@ python3 run_experiment.py \
 Each experiment automatically gets an unique based on timestamp. The results are stored in results/<experiment id>. If your experiment gets interrupted, you can continue the experiment by adding the correct id with --experiment-id <id> to the run_experiment command. You can also add new models to the experiment later the same way.
 
 run_experiment.py automatically checks that each specified model can be reached before starting the main benchmark. However, It is still suggested to use quick-test to check that new models work properly. Check that the final results look ok in quick-test.
-
-
-
-## Installation
-
-1. Install Terraform (also [install AWS CLI and setup credentials](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-build#prerequisites))
-2. Install [Opa](https://www.openpolicyagent.org/docs/latest/#1-download-opa) (make sure to add opa to path and we used opa version: 0.46.0).
-3. <sup>*</sup>Obtain the following LLM model inference API keys as appropriate, depending on which of our currently supported models you want to perform evaluation on:
-- [OpenAI API token](https://platform.openai.com/docs/quickstart/account-setup): for GPT-3.5-Turbo and GPT-4
-- [Google API token](https://ai.google.dev/gemini-api/docs/quickstart?lang=python#set-up-api-key): for Gemini-1.0-Pro
-- [Replicate API token](https://replicate.com/): for CodeLlama and WizardCoder variants
-
-<sup>*</sup> Our evaluation against MagiCoder was performed on a manually deployed AWS SageMaker instance inference endpoint. We provide more details on our setup script, see `evaluation/README.md`, if that is of interest.  
-
-### Using the Evaluation Pipeline
-
-To access and utilize the evaluation pipeline, you need to switch to a specific branch of this repository and set up the environment. Follow these steps:
-
-1. Ensure you have the `main` branch of the project checked out.
-
-2. Install the Conda environment by running:
-
-   ```shell
-   conda env create -f environment.yml
-   ```
-
-3. Activate the newly created Conda environment named `iac-eval`:
-
-   ```shell
-   conda activate iac-eval
-   ```
-
-   Note: before `conda activate` you might need to do `conda init SHELL_NAME` on your preferred shell (e.g. `conda init bash`). If you run into problems initializing the shell session, try referring to [this GitHub issue](https://github.com/conda/conda/issues/13423#issuecomment-2113968807) for a fix.
- 
-4. (Optional) Preconfigure the retriever database (if you would like to use the RAG strategy): refer to instructions in `retriever/README.md`.
-
-5. See instructions in `evaluation/README.md` for details on how to use the main pipeline: `eval.py`, and other scripts.
-
-Note: You can run `./setup.sh` to check if you have Terraform and OPA installed. It will also create and activate the necessary conda environment. The shell script assumes you are using `bash`, change `#!/bin/SHELL` to your preferred shell in the script.
-
-
-
-
 ## Acknowledgments
 
 <https://github.com/openai/human-eval/tree/master>
